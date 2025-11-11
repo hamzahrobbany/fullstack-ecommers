@@ -8,19 +8,34 @@ const defaultCookieOptions: CookieOptions = {
 };
 
 const normalizeToken = (token: string): string => {
-  return token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return trimmed.startsWith('Bearer ') ? trimmed : `Bearer ${trimmed}`;
 };
+
+const normalizeTenantId = (tenantId: string): string => tenantId.trim();
 
 export function storeAuthCookies(tenantId: string, token: string) {
   const normalizedToken = normalizeToken(token);
+  const normalizedTenant = normalizeTenantId(tenantId);
 
-  setCookie('tenant_id', tenantId, defaultCookieOptions);
-  setCookie('kop_at', normalizedToken, defaultCookieOptions);
+  if (normalizedTenant) {
+    setCookie('tenant_id', normalizedTenant, defaultCookieOptions);
+  }
+  if (normalizedToken) {
+    setCookie('kop_at', normalizedToken, defaultCookieOptions);
+  }
 
   if (typeof window !== 'undefined') {
     try {
-      window.localStorage.setItem('swagger_tenant', tenantId);
-      window.localStorage.setItem('swagger_token', normalizedToken);
+      if (normalizedTenant) {
+        window.localStorage.setItem('swagger_tenant', normalizedTenant);
+      }
+      if (normalizedToken) {
+        window.localStorage.setItem('swagger_token', normalizedToken);
+      }
     } catch (error) {
       console.warn('[useAuthCookies] gagal menyimpan ke localStorage:', error);
     }

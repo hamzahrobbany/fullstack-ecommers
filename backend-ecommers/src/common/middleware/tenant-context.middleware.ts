@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 
+import { decode } from 'jsonwebtoken';
+
 import { TenantsService } from '@/modules/tenants/tenants.service';
 import type { Tenant } from '@/modules/tenants/entities/tenant.entity';
 
@@ -13,6 +15,7 @@ export interface TenantCarrier {
   tenant?: Tenant | null;
   tenantId?: string | null;
   tenantCode?: string | null;
+  tenantSource?: 'header' | 'cookie' | 'jwt' | 'none';
 }
 
 interface TenantJwtPayload extends TenantCarrier {
@@ -75,7 +78,7 @@ export class TenantContextMiddleware implements NestMiddleware {
     const path = this.getRequestPath(req);
 
     if (this.isPublicRoute(path) || method === 'OPTIONS') {
-      this.attachTenant(req, null);
+      this.attachTenant(req, null, 'none');
       this.logger.debug(
         `${method} ${path} | public route, skipping tenant context`,
       );
@@ -108,7 +111,7 @@ export class TenantContextMiddleware implements NestMiddleware {
     );
 
     if (!tenantIdentifier) {
-      this.attachTenant(req, null);
+      this.attachTenant(req, null, 'none');
       return next(new BadRequestException('Tenant context tidak ditemukan'));
     }
 
@@ -125,7 +128,7 @@ export class TenantContextMiddleware implements NestMiddleware {
       }
 
       if (!tenant) {
-        this.attachTenant(req, null);
+        this.attachTenant(req, null, identifierSource);
         return next(
           new BadRequestException(
             `Tenant tidak valid atau tidak ditemukan (ID/Code: ${tenantIdentifier})`,
@@ -133,7 +136,7 @@ export class TenantContextMiddleware implements NestMiddleware {
         );
       }
 
-      this.attachTenant(req, tenant);
+      this.attachTenant(req, tenant, identifierSource);
       this.logger.debug(
         `${method} ${path} | tenant resolved => ${tenant.id} (${tenant.code})`,
       );
@@ -144,7 +147,7 @@ export class TenantContextMiddleware implements NestMiddleware {
         `TenantContextMiddleware error: ${err.message}`,
         err.stack ?? undefined,
       );
-      this.attachTenant(req, null);
+      this.attachTenant(req, null, identifierSource);
       return next(new BadRequestException('Tenant tidak valid'));
     }
   }
@@ -273,10 +276,18 @@ export class TenantContextMiddleware implements NestMiddleware {
 
     const tenant = this.extractTenantFromPayload(payload);
     const identifier =
-      this.normalizeIdentifier(this.extractString(payload, 'tenantId') ?? undefined) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenant_id') ?? undefined) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenantCode') ?? undefined) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenant_code') ?? undefined) ??
+      this.normalizeIdentifier(
+        this.extractString(payload, 'tenantId') ?? undefined,
+      ) ??
+      this.normalizeIdentifier(
+        this.extractString(payload, 'tenant_id') ?? undefined,
+      ) ??
+      this.normalizeIdentifier(
+        this.extractString(payload, 'tenantCode') ?? undefined,
+      ) ??
+      this.normalizeIdentifier(
+        this.extractString(payload, 'tenant_code') ?? undefined,
+      ) ??
       (tenant ? this.normalizeIdentifier(tenant.id) : null) ??
       (tenant ? this.normalizeIdentifier(tenant.code) : null);
 
@@ -332,26 +343,46 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
   }
 
-  private attachTenant(req: TenantAwareRequest, tenant: Tenant | null): void {
+  private attachTenant(
+    req: TenantAwareRequest,
+    tenant: Tenant | null,
+    source: 'header' | 'cookie' | 'jwt' | 'none',
+  ): void {
     const tenantId = tenant?.id ?? null;
     const tenantCode = tenant?.code ?? null;
 
     req.tenant = tenant;
     req.tenantId = tenantId;
     req.tenantCode = tenantCode;
+    req.tenantSource = source;
 
     if (req.raw && typeof req.raw === 'object') {
-      Object.assign(req.raw, { tenant, tenantId, tenantCode });
+      Object.assign(req.raw, {
+        tenant,
+        tenantId,
+        tenantCode,
+        tenantSource: source,
+      });
       const rawUser = (req.raw as { user?: TenantCarrier | null }).user;
       if (rawUser && typeof rawUser === 'object') {
-        Object.assign(rawUser, { tenant, tenantId, tenantCode });
+        Object.assign(rawUser, {
+          tenant,
+          tenantId,
+          tenantCode,
+          tenantSource: source,
+        });
       }
     }
 
     if (!req.user || typeof req.user !== 'object') {
-      req.user = { tenant, tenantId, tenantCode };
+      req.user = { tenant, tenantId, tenantCode, tenantSource: source };
     } else {
-      Object.assign(req.user, { tenant, tenantId, tenantCode });
+      Object.assign(req.user, {
+        tenant,
+        tenantId,
+        tenantCode,
+        tenantSource: source,
+      });
     }
   }
 
@@ -371,6 +402,33 @@ export class TenantContextMiddleware implements NestMiddleware {
   }
 
   private getJwtPayload(req: TenantAwareRequest): TenantJwtPayload | null {
+    const payloadFromUser = this.getJwtPayloadFromRequestUser(req);
+    if (payloadFromUser) {
+      return payloadFromUser;
+    }
+
+    const token = this.getAuthorizationToken(req);
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const decoded = decode(token, { json: true });
+      if (decoded && typeof decoded === 'object') {
+        return decoded as TenantJwtPayload;
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Gagal decode JWT untuk tenant context: ${(error as Error).message}`,
+      );
+    }
+
+    return null;
+  }
+
+  private getJwtPayloadFromRequestUser(
+    req: TenantAwareRequest,
+  ): TenantJwtPayload | null {
     const candidates: unknown[] = [];
 
     if (req.user && typeof req.user === 'object') {
@@ -391,6 +449,27 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
 
     return null;
+  }
+
+  private getAuthorizationToken(req: TenantAwareRequest): string | null {
+    const headers = this.mergeHeaders(req);
+    const authHeader = headers.authorization ?? headers.Authorization;
+    const rawHeader = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+
+    if (typeof rawHeader !== 'string') {
+      return null;
+    }
+
+    const trimmed = rawHeader.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    if (/^bearer\s+/i.test(trimmed)) {
+      return trimmed.replace(/^bearer\s+/i, '').trim();
+    }
+
+    return trimmed;
   }
 
   private extractString(source: TenantJwtPayload, key: string): string | null {

@@ -4,13 +4,19 @@ import { getCookie } from 'cookies-next';
 const DEFAULT_TIMEOUT = 10_000;
 const API_PREFIX = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
+const normalizeCookieValue = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 const resolveCookie = (name: string): string | null => {
   try {
     const value = getCookie(name);
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
-    }
-    return null;
+    return normalizeCookieValue(value ?? null);
   } catch (error) {
     console.warn(`[api-client] gagal membaca cookie "${name}":`, error);
     return null;
@@ -18,10 +24,13 @@ const resolveCookie = (name: string): string | null => {
 };
 
 const buildAuthorizationHeader = (token: string | null): string | null => {
-  if (!token) {
+  const normalized = normalizeCookieValue(token);
+  if (!normalized) {
     return null;
   }
-  return token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+  return normalized.startsWith('Bearer ')
+    ? normalized
+    : `Bearer ${normalized}`;
 };
 
 export const api = ky.create({
@@ -35,11 +44,11 @@ export const api = ky.create({
         const tenantId = resolveCookie('tenant_id');
 
         const authHeader = buildAuthorizationHeader(token);
-        if (authHeader && !request.headers.has('Authorization')) {
+        if (authHeader) {
           request.headers.set('Authorization', authHeader);
         }
 
-        if (tenantId && !request.headers.has('X-Tenant-ID')) {
+        if (tenantId) {
           request.headers.set('X-Tenant-ID', tenantId);
         }
 
