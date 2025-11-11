@@ -12,6 +12,12 @@ import type { Tenant } from '@/modules/tenants/entities/tenant.entity';
 export interface TenantCarrier {
   tenant?: Tenant | null;
   tenantId?: string | null;
+  tenantCode?: string | null;
+}
+
+interface TenantJwtPayload extends TenantCarrier {
+  tenantCode?: string | null;
+  [key: string]: unknown;
 }
 
 type HeadersRecord = Record<string, string | string[] | undefined>;
@@ -22,19 +28,23 @@ type FastifyLikeRequest = {
   originalUrl?: string;
   url?: string;
   method?: string;
-  raw?: (TenantCarrier &
-    Record<string, unknown> & {
-      headers?: HeadersRecord;
-      cookies?: Record<string, string>;
-      originalUrl?: string;
-      url?: string;
-      method?: string;
-      user?: TenantCarrier & Record<string, unknown>;
-    }) | null;
+  raw?:
+    | (TenantCarrier &
+        Record<string, unknown> & {
+          headers?: HeadersRecord;
+          cookies?: Record<string, string>;
+          originalUrl?: string;
+          url?: string;
+          method?: string;
+          user?: TenantCarrier & Record<string, unknown>;
+        })
+    | null;
   user?: (TenantCarrier & Record<string, unknown>) | null;
 };
 
-export type TenantAwareRequest = Partial<Request> & FastifyLikeRequest & TenantCarrier;
+export type TenantAwareRequest = Partial<Request> &
+  FastifyLikeRequest &
+  TenantCarrier;
 
 type ResponseLike = Response | Record<string, unknown>;
 
@@ -66,15 +76,35 @@ export class TenantContextMiddleware implements NestMiddleware {
 
     if (this.isPublicRoute(path) || method === 'OPTIONS') {
       this.attachTenant(req, null);
-      this.logger.debug(`${method} ${path} | public route, skipping tenant context`);
+      this.logger.debug(
+        `${method} ${path} | public route, skipping tenant context`,
+      );
       return next();
     }
 
-    const tenantIdentifier =
-      this.getTenantIdFromHeader(req) ?? this.getTenantIdFromCookie(req);
+    let identifierSource: 'header' | 'cookie' | 'jwt' | 'none' = 'none';
+    let tenantIdentifier = this.getTenantIdFromHeader(req);
+    if (tenantIdentifier) {
+      identifierSource = 'header';
+    } else {
+      tenantIdentifier = this.getTenantIdFromCookie(req);
+      if (tenantIdentifier) {
+        identifierSource = 'cookie';
+      }
+    }
+
+    const jwtTenantInfo = !tenantIdentifier
+      ? this.getTenantIdentifierFromJwt(req)
+      : null;
+    if (!tenantIdentifier && jwtTenantInfo) {
+      tenantIdentifier = jwtTenantInfo.identifier;
+      identifierSource = 'jwt';
+    }
 
     this.logger.debug(
-      `${method} ${path} | tenant identifier: ${tenantIdentifier ?? 'none'}`,
+      `${method} ${path} | tenant identifier [${identifierSource}] => ${
+        tenantIdentifier ?? 'none'
+      }`,
     );
 
     if (!tenantIdentifier) {
@@ -83,7 +113,16 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
 
     try {
-      const tenant = await this.resolveTenant(tenantIdentifier);
+      let tenant: Tenant | null =
+        jwtTenantInfo?.tenant && this.isTenantEntity(jwtTenantInfo.tenant)
+          ? this.tenantMatchesIdentifier(jwtTenantInfo.tenant, tenantIdentifier)
+            ? jwtTenantInfo.tenant
+            : null
+          : null;
+
+      if (!tenant) {
+        tenant = await this.resolveTenant(tenantIdentifier);
+      }
 
       if (!tenant) {
         this.attachTenant(req, null);
@@ -127,16 +166,17 @@ export class TenantContextMiddleware implements NestMiddleware {
   private getRequestPath(req: TenantAwareRequest): string {
     const rawUrl =
       typeof req.raw === 'object' && req.raw
-        ? ('originalUrl' in req.raw && typeof req.raw.originalUrl === 'string'
-            ? req.raw.originalUrl
-            : 'url' in req.raw && typeof req.raw.url === 'string'
-              ? req.raw.url
-              : undefined)
+        ? 'originalUrl' in req.raw && typeof req.raw.originalUrl === 'string'
+          ? req.raw.originalUrl
+          : 'url' in req.raw && typeof req.raw.url === 'string'
+            ? req.raw.url
+            : undefined
         : undefined;
     const url = req.originalUrl ?? req.url ?? rawUrl ?? '/';
-    const normalized = url.startsWith('http://') || url.startsWith('https://')
-      ? this.safeParseUrl(url)
-      : url;
+    const normalized =
+      url.startsWith('http://') || url.startsWith('https://')
+        ? this.safeParseUrl(url)
+        : url;
 
     const pathname = normalized.split('?')[0];
     return pathname.startsWith('/') ? pathname : `/${pathname}`;
@@ -160,18 +200,46 @@ export class TenantContextMiddleware implements NestMiddleware {
     };
   }
 
+  private getCookies(req: TenantAwareRequest): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    const assignCookies = (source: unknown): void => {
+      if (!source || typeof source !== 'object') {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(
+        source as Record<string, unknown>,
+      )) {
+        if (typeof value === 'string') {
+          result[key] = value;
+        }
+      }
+    };
+
+    assignCookies(req.cookies ?? null);
+
+    if (req.raw && typeof req.raw === 'object' && 'cookies' in req.raw) {
+      assignCookies((req.raw as { cookies?: unknown }).cookies);
+    }
+
+    return result;
+  }
+
   private getTenantIdFromHeader(req: TenantAwareRequest): string | null {
     const headers = this.mergeHeaders(req);
     const value = headers['x-tenant-id'] ?? headers['X-Tenant-ID'];
     if (Array.isArray(value)) {
       return this.normalizeIdentifier(value[0]);
     }
-    return this.normalizeIdentifier(value as string | undefined);
+    return this.normalizeIdentifier(value);
   }
 
   private getTenantIdFromCookie(req: TenantAwareRequest): string | null {
-    if (req.cookies?.tenant_id) {
-      return this.normalizeIdentifier(req.cookies.tenant_id);
+    const cookies = this.getCookies(req);
+    const directCookie = this.normalizeIdentifier(cookies['tenant_id']);
+    if (directCookie) {
+      return directCookie;
     }
 
     const headers = this.mergeHeaders(req);
@@ -195,12 +263,47 @@ export class TenantContextMiddleware implements NestMiddleware {
     return null;
   }
 
+  private getTenantIdentifierFromJwt(
+    req: TenantAwareRequest,
+  ): { identifier: string; tenant: Tenant | null } | null {
+    const payload = this.getJwtPayload(req);
+    if (!payload) {
+      return null;
+    }
+
+    const tenant = this.extractTenantFromPayload(payload);
+    const identifier =
+      this.normalizeIdentifier(this.extractString(payload, 'tenantId')) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenant_id')) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenantCode')) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenant_code')) ??
+      (tenant ? this.normalizeIdentifier(tenant.id) : null) ??
+      (tenant ? this.normalizeIdentifier(tenant.code) : null);
+
+    if (!identifier) {
+      return null;
+    }
+
+    return {
+      identifier,
+      tenant,
+    };
+  }
+
   private async resolveTenant(identifier: string): Promise<Tenant | null> {
     const looksUuid = this.looksLikeUuid(identifier);
 
     if (looksUuid) {
       try {
-        return await this.tenantsService.findById(identifier);
+        const tenantResult: unknown =
+          await this.tenantsService.findById(identifier);
+        if (this.isTenantEntity(tenantResult)) {
+          return tenantResult;
+        }
+        this.logger.debug(
+          `Tenant lookup by ID returned invalid shape for ${identifier}`,
+        );
+        return null;
       } catch (error) {
         this.logger.debug(
           `Tenant lookup by ID failed for ${identifier}: ${(error as Error).message}`,
@@ -210,7 +313,17 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
 
     try {
-      return (await this.tenantsService.findByCode(identifier)) ?? null;
+      const tenantResult: unknown =
+        await this.tenantsService.findByCode(identifier);
+      if (this.isTenantEntity(tenantResult)) {
+        return tenantResult;
+      }
+      if (tenantResult) {
+        this.logger.debug(
+          `Tenant lookup by code returned invalid shape for ${identifier}`,
+        );
+      }
+      return null;
     } catch (error) {
       this.logger.debug(
         `Tenant lookup by code failed for ${identifier}: ${(error as Error).message}`,
@@ -221,22 +334,24 @@ export class TenantContextMiddleware implements NestMiddleware {
 
   private attachTenant(req: TenantAwareRequest, tenant: Tenant | null): void {
     const tenantId = tenant?.id ?? null;
+    const tenantCode = tenant?.code ?? null;
 
     req.tenant = tenant;
     req.tenantId = tenantId;
+    req.tenantCode = tenantCode;
 
     if (req.raw && typeof req.raw === 'object') {
-      Object.assign(req.raw, { tenant, tenantId });
+      Object.assign(req.raw, { tenant, tenantId, tenantCode });
       const rawUser = (req.raw as { user?: TenantCarrier | null }).user;
       if (rawUser && typeof rawUser === 'object') {
-        Object.assign(rawUser, { tenant, tenantId });
+        Object.assign(rawUser, { tenant, tenantId, tenantCode });
       }
     }
 
     if (!req.user || typeof req.user !== 'object') {
-      req.user = { tenant, tenantId };
+      req.user = { tenant, tenantId, tenantCode };
     } else {
-      Object.assign(req.user, { tenant, tenantId });
+      Object.assign(req.user, { tenant, tenantId, tenantCode });
     }
   }
 
@@ -253,5 +368,64 @@ export class TenantContextMiddleware implements NestMiddleware {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value,
     );
+  }
+
+  private getJwtPayload(req: TenantAwareRequest): TenantJwtPayload | null {
+    const candidates: unknown[] = [];
+
+    if (req.user && typeof req.user === 'object') {
+      candidates.push(req.user);
+    }
+
+    if (req.raw && typeof req.raw === 'object' && 'user' in req.raw) {
+      const rawUser = (req.raw as { user?: unknown }).user;
+      if (rawUser && typeof rawUser === 'object') {
+        candidates.push(rawUser);
+      }
+    }
+
+    for (const candidate of candidates) {
+      if (this.isJwtPayloadCandidate(candidate)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  private extractString(source: TenantJwtPayload, key: string): string | null {
+    const value = source[key];
+    return typeof value === 'string' ? value : null;
+  }
+
+  private extractTenantFromPayload(payload: TenantJwtPayload): Tenant | null {
+    const candidate = payload.tenant;
+    if (this.isTenantEntity(candidate)) {
+      return candidate;
+    }
+    return null;
+  }
+
+  private isTenantEntity(candidate: unknown): candidate is Tenant {
+    return (
+      !!candidate &&
+      typeof candidate === 'object' &&
+      'id' in candidate &&
+      typeof (candidate as { id?: unknown }).id === 'string' &&
+      'code' in candidate &&
+      typeof (candidate as { code?: unknown }).code === 'string'
+    );
+  }
+
+  private isJwtPayloadCandidate(
+    candidate: unknown,
+  ): candidate is TenantJwtPayload {
+    return !!candidate && typeof candidate === 'object';
+  }
+
+  private tenantMatchesIdentifier(tenant: Tenant, identifier: string): boolean {
+    const normalizedId = this.normalizeIdentifier(tenant.id);
+    const normalizedCode = this.normalizeIdentifier(tenant.code);
+    return normalizedId === identifier || normalizedCode === identifier;
   }
 }

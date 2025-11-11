@@ -9,6 +9,7 @@ export class DebugController {
     return {
       message: 'TenantContextMiddleware test',
       tenantId: req.tenantId ?? null,
+      tenantCode: req.tenantCode ?? null,
       tenant: req.tenant ?? null,
     };
   }

@@ -17,13 +17,26 @@ export function swaggerAuthPlugin() {
                 try {
                   if (typeof window !== 'undefined' && window.localStorage) {
                     const token = window.localStorage.getItem('swagger_token');
-                    const tenantId = window.localStorage.getItem('swagger_tenant');
+                    const tenantId =
+                      window.localStorage.getItem('swagger_tenant');
 
-                    if (token && !headers.Authorization) {
-                      headers.Authorization = token;
+                    if (!token) {
+                      console.warn(
+                        '[SwaggerPlugin] localStorage.swagger_token belum diatur. ' +
+                          'Gunakan localStorage.setItem("swagger_token", "Bearer <token>")',
+                      );
+                    } else if (!headers.Authorization) {
+                      headers.Authorization = token.startsWith('Bearer ')
+                        ? token
+                        : `Bearer ${token}`;
                     }
 
-                    if (tenantId && !headers['X-Tenant-ID']) {
+                    if (!tenantId) {
+                      console.warn(
+                        '[SwaggerPlugin] localStorage.swagger_tenant belum diatur. ' +
+                          'Gunakan localStorage.setItem("swagger_tenant", "<tenant>")',
+                      );
+                    } else if (!headers['X-Tenant-ID']) {
                       headers['X-Tenant-ID'] = tenantId;
                     }
                   }
