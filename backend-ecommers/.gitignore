@@ -1,0 +1,95 @@
+# ==========================================================
+# ✅ Node / NestJS / Prisma / Vercel Project .gitignore
+# ==========================================================
+
+# Compiled output
+/dist
+/build
+/node_modules
+
+# Prisma build artifacts
+prisma/*.js
+prisma/*.d.ts
+prisma/*.js.map
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Tests & Coverage
+/coverage
+/.nyc_output
+/jest-*
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# Temporary directories
+.temp
+.tmp
+tmp/
+.cache/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Lock files (optional, uncomment if needed)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ==========================================================
+# ⚙️ Platform & Deployment
+# ==========================================================
+
+# Vercel build output
+.vercel
+
+# Render / Fly.io temp builds
+.fly
+.render
+
+# ==========================================================
+# 🧱 Misc
+# ==========================================================
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# npm cache
+.npm/

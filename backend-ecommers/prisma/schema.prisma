@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// ==========================
+/// 🏢 TENANT (Toko / Store)
+/// ==========================
+model Tenant {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  domain    String?  @unique
+  address   String?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  products    Product[]
+  subscribers Subscriber[]
+  users       User[]
+  orders      Order[]
+}
+
+/// ==========================
+/// 👤 USERS (Admin, Staff, Customer)
+/// ==========================
+model User {
+  id            String         @id @default(uuid())
+  tenantId      String
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(CUSTOMER)
+  refreshTokens RefreshToken[] // relasi ke token
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relasi
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  orders Order[]
+}
+
+/// ==========================
+/// 🔐 REFRESH TOKENS (Auth)
+/// ==========================
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// ==========================
+/// ☕ PRODUCTS
+/// ==========================
+model Product {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  category    String?          // ✅ tambahkan field ini
+  description String?
+  price       Int
+  stock       Int      @default(0) // ✅ tambahkan field ini
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  orderItems OrderItem[]
+  stocks     Stock[]
+}
+
+/// ==========================
+/// 📦 STOCKS (dipisah per lokasi)
+/// ==========================
+model Stock {
+  id        String   @id @default(uuid())
+  productId String
+  location  String?
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  product Product @relation(fields: [productId], references: [id])
+}
+
+/// ==========================
+/// ✉️ SUBSCRIBERS (Newsletter)
+/// ==========================
+model Subscriber {
+  id         String   @id @default(uuid())
+  tenantId   String
+  email      String
+  name       String?
+  subscribed Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+}
+
+/// ==========================
+/// 🧾 ORDERS
+/// ==========================
+model Order {
+  id          String      @id @default(uuid())
+  tenantId    String
+  userId      String
+  totalAmount Int
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relasi
+  tenant  Tenant      @relation(fields: [tenantId], references: [id])
+  user    User        @relation(fields: [userId], references: [id])
+  items   OrderItem[]
+  payment Payment?
+}
+
+/// ==========================
+/// 🛒 ORDER ITEMS
+/// ==========================
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  subtotal  Int
+
+  // Relasi
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+/// ==========================
+/// 💳 PAYMENTS
+/// ==========================
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  method        PaymentMethod @default(CASH)
+  amount        Int
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+/// ==========================
+/// 📚 ENUMS
+/// ==========================
+enum Role {
+  OWNER
+  ADMIN
+  CUSTOMER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  QRIS
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
