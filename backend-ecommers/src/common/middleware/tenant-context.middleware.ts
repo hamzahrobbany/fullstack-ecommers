@@ -273,10 +273,10 @@ export class TenantContextMiddleware implements NestMiddleware {
 
     const tenant = this.extractTenantFromPayload(payload);
     const identifier =
-      this.normalizeIdentifier(this.extractString(payload, 'tenantId')) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenant_id')) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenantCode')) ??
-      this.normalizeIdentifier(this.extractString(payload, 'tenant_code')) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenantId') ?? undefined) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenant_id') ?? undefined) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenantCode') ?? undefined) ??
+      this.normalizeIdentifier(this.extractString(payload, 'tenant_code') ?? undefined) ??
       (tenant ? this.normalizeIdentifier(tenant.id) : null) ??
       (tenant ? this.normalizeIdentifier(tenant.code) : null);
 
