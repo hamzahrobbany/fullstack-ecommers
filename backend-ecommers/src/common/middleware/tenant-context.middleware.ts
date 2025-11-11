@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { verify, type JwtPayload } from 'jsonwebtoken';
-import { TenantsService } from '../../modules/tenants/tenants.service';
-import type { Tenant } from '../../modules/tenants/entities/tenant.entity';
+import { TenantsService } from '@/modules/tenants/tenants.service';
+import type { Tenant } from '@/modules/tenants/entities/tenant.entity';
 
 interface TenantAwareRequest extends Request {
   user?: Record<string, any>;
@@ -55,14 +55,6 @@ export class TenantContextMiddleware implements NestMiddleware {
         fromHost: this.getTenantDomainFromHost(req),
         resolved: tenantIdentifier,
       });
-
-      // ⚙️ DEV FALLBACK TENANT (aktif hanya saat development)
-      if (!tenantIdentifier && process.env.NODE_ENV === 'development') {
-        tenantIdentifier = 'salwa'; // fallback tenant code
-        this.logger.warn(
-          '⚠️ [Dev Fallback] Tenant header tidak ditemukan — memakai tenant default: salwa',
-        );
-      }
 
       if (!tenantIdentifier) {
         if (this.isTenantOptional(req, normalizedUrl)) {

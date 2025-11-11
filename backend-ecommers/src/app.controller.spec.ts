@@ -1,22 +1,24 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 describe('AppController', () => {
   let appController: AppController;
 
   beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
-    }).compile();
-
-    appController = app.get<AppController>(AppController);
+    appController = new AppController();
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
-    });
+  it('returns landing metadata from root route', () => {
+    const result = appController.getRoot();
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('Backend E-Commerce API');
+    expect(result.endpoints).toContain('/api/products');
+  });
+
+  it('returns health information', () => {
+    const result = appController.getHealth();
+
+    expect(result.status).toBe('ok');
+    expect(result.timestamp).toBeDefined();
   });
 });

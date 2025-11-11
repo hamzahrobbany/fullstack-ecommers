@@ -57,7 +57,7 @@ export class AuthService {
       name: dto.name,
       email: normalizedEmail,
       password: hashed,
-      role: 'CUSTOMER',
+      role: dto.role ?? 'CUSTOMER',
       tenantId: tenant.id,
     });
 

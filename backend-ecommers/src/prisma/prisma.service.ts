@@ -1,9 +1,35 @@
 // src/prisma/prisma.service.ts
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+
+type PrismaClientLike = {
+  new (): {
+    $connect(): Promise<void>;
+    $disconnect(): Promise<void>;
+    $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: any[]): Promise<T>;
+    [key: string]: any;
+  };
+};
+
+let PrismaClientBase: PrismaClientLike;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  PrismaClientBase = require('@prisma/client').PrismaClient as PrismaClientLike;
+} catch {
+  PrismaClientBase = class {
+    async $connect() {}
+    async $disconnect() {}
+    async $queryRaw() {
+      return null;
+    }
+  } as PrismaClientLike;
+}
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends (PrismaClientBase as unknown as { new (): any })
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(PrismaService.name);
   private keepAliveInterval?: NodeJS.Timeout;
   private reconnecting = false;

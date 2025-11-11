@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../common/prisma.service';
+import { PrismaService } from '@/prisma/prisma.service';
 import { RegisterDto, REGISTER_ROLE_VALUES } from './dto/register.dto';
 
 type Role = (typeof REGISTER_ROLE_VALUES)[number];

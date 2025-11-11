@@ -4,10 +4,9 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '@/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Role } from '@prisma/client';
 
 import { PasswordUtil } from '../auth/utils/password.util';
 import { Tenant } from '../tenants/entities/tenant.entity';
@@ -36,12 +35,16 @@ export class UsersService {
 
     const hashed = await PasswordUtil.hash(dto.password);
 
+    const allowedRoles = new Set(['OWNER', 'ADMIN', 'CUSTOMER']);
+    const normalizedRole = dto.role?.toUpperCase?.() ?? 'CUSTOMER';
+    const role = allowedRoles.has(normalizedRole) ? normalizedRole : 'CUSTOMER';
+
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
         email: dto.email,
         password: hashed,
-        role: (dto.role as Role) ?? Role.CUSTOMER,
+        role,
         tenantId: tenant.id,
       },
     });

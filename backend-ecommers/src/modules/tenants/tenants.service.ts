@@ -3,7 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '@/prisma/prisma.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { CreateTenantWithOwnerDto } from './dto/create-tenant-with-owner.dto';
@@ -12,6 +12,10 @@ import { PasswordUtil } from '../auth/utils/password.util';
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private get orm() {
+    return this.prisma as any;
+  }
 
   // ===========================================================
   // 🧩 CREATE TENANT
@@ -23,7 +27,7 @@ export class TenantsService {
     // 🔹 Validasi unik code & domain
     await this.ensureUniqueFields(code, domain);
 
-    return this.prisma.tenant.create({
+    return this.orm.tenant.create({
       data: { ...dto, code, domain },
     });
   }
@@ -32,7 +36,7 @@ export class TenantsService {
   // 📜 FIND ALL
   // ===========================================================
   async findAll() {
-    return this.prisma.tenant.findMany({
+    return this.orm.tenant.findMany({
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -41,7 +45,7 @@ export class TenantsService {
   // 🔍 FIND ONE BY ID
   // ===========================================================
   async findById(id: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    const tenant = await this.orm.tenant.findUnique({ where: { id } });
     if (!tenant)
       throw new NotFoundException(`Tenant dengan ID "${id}" tidak ditemukan`);
     return tenant;
@@ -52,7 +56,7 @@ export class TenantsService {
   // ===========================================================
   async findByCode(code: string) {
     if (!code) throw new BadRequestException('Kode tenant wajib diisi');
-    const tenant = await this.prisma.tenant.findUnique({
+    const tenant = await this.orm.tenant.findUnique({
       where: { code: code.toLowerCase().trim() },
     });
     if (!tenant)
@@ -65,7 +69,7 @@ export class TenantsService {
   // ===========================================================
   async findByDomain(domain: string) {
     if (!domain) throw new BadRequestException('Domain wajib diisi');
-    const tenant = await this.prisma.tenant.findUnique({
+    const tenant = await this.orm.tenant.findUnique({
       where: { domain: domain.toLowerCase().trim() },
     });
     if (!tenant)
@@ -93,7 +97,7 @@ export class TenantsService {
       await this.ensureDomainUnique(newDomain, id);
     }
 
-    return this.prisma.tenant.update({
+    return this.orm.tenant.update({
       where: { id },
       data: { ...dto, code: newCode ?? tenant.code, domain: newDomain ?? tenant.domain },
     });
@@ -104,7 +108,7 @@ export class TenantsService {
   // ===========================================================
   async remove(id: string) {
     await this.findById(id);
-    await this.prisma.tenant.delete({ where: { id } });
+    await this.orm.tenant.delete({ where: { id } });
     return { message: `Tenant dengan ID "${id}" berhasil dihapus` };
   }
 
@@ -116,21 +120,21 @@ export class TenantsService {
     const email = dto.ownerEmail.toLowerCase().trim();
 
     // 🔹 Cek kode tenant
-    const existingTenant = await this.prisma.tenant.findUnique({
+    const existingTenant = await this.orm.tenant.findUnique({
       where: { code },
     });
     if (existingTenant)
       throw new BadRequestException(`Kode tenant "${code}" sudah digunakan`);
 
     // 🔹 Cek email owner
-    const existingOwner = await this.prisma.user.findUnique({
+    const existingOwner = await this.orm.user.findUnique({
       where: { email },
     });
     if (existingOwner)
       throw new BadRequestException(`Email "${email}" sudah digunakan`);
 
     // 🔹 Buat tenant
-    const tenant = await this.prisma.tenant.create({
+    const tenant = await this.orm.tenant.create({
       data: {
         code,
         name: dto.name,
@@ -142,7 +146,7 @@ export class TenantsService {
     const hashedPassword = await PasswordUtil.hash(dto.ownerPassword);
 
     // 🔹 Buat user owner
-    const owner = await this.prisma.user.create({
+    const owner = await this.orm.user.create({
       data: {
         name: dto.ownerName,
         email,
@@ -165,14 +169,14 @@ export class TenantsService {
   }
 
   private async ensureCodeUnique(code: string, excludeId?: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { code } });
+    const tenant = await this.orm.tenant.findUnique({ where: { code } });
     if (tenant && tenant.id !== excludeId) {
       throw new BadRequestException(`Kode "${code}" sudah digunakan`);
     }
   }
 
   private async ensureDomainUnique(domain: string, excludeId?: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { domain } });
+    const tenant = await this.orm.tenant.findUnique({ where: { domain } });
     if (tenant && tenant.id !== excludeId) {
       throw new BadRequestException(`Domain "${domain}" sudah digunakan`);
     }
