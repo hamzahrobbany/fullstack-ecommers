@@ -1,26 +1,50 @@
+type SwaggerHeaders = Record<string, string>;
+
+/**
+ * Plugin Swagger custom untuk secara otomatis menambahkan header otentikasi & tenant.
+ * Header diambil dari `localStorage` agar pengalaman testing di Swagger UI konsisten.
+ */
 export function swaggerAuthPlugin() {
-  return function (system) {
+  return function swaggerAuthPluginFactory() {
     return {
       statePlugins: {
         spec: {
           wrapActions: {
-            executeRequest: (ori) => async (req) => {
-              try {
-                const token = window?.localStorage?.getItem('swagger_token');
-                const tenant = window?.localStorage?.getItem('swagger_tenant');
+            executeRequest:
+              (ori: (req: { headers?: SwaggerHeaders }) => Promise<unknown>) =>
+              async (req: { headers?: SwaggerHeaders }): Promise<unknown> => {
+                const headers: SwaggerHeaders = { ...(req.headers ?? {}) };
 
-                req.headers = req.headers || {};
-                if (token && !req.headers.Authorization) {
-                  req.headers.Authorization = `Bearer ${token}`;
+                try {
+                  const storage =
+                    typeof window !== 'undefined'
+                      ? window.localStorage
+                      : undefined;
+                  const bearerToken =
+                    storage?.getItem('swagger_token') ??
+                    storage?.getItem('access_token') ??
+                    undefined;
+                  const tenantId =
+                    storage?.getItem('swagger_tenant') ??
+                    storage?.getItem('tenant_id') ??
+                    undefined;
+
+                  if (bearerToken && !headers.Authorization) {
+                    headers.Authorization = `Bearer ${bearerToken}`;
+                  }
+
+                  if (tenantId && !headers['X-Tenant-ID']) {
+                    headers['X-Tenant-ID'] = tenantId;
+                  }
+                } catch (error) {
+                  console.warn(
+                    '[SwaggerPlugin] Gagal menambahkan header auth/tenant:',
+                    error,
+                  );
                 }
-                if (tenant && !req.headers['X-Tenant-ID']) {
-                  req.headers['X-Tenant-ID'] = tenant;
-                }
-              } catch (e) {
-                console.warn('[SwaggerPlugin] Header attach failed:', e);
-              }
-              return ori(req);
-            },
+
+                return ori({ ...req, headers });
+              },
           },
         },
       },

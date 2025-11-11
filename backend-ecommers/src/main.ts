@@ -65,26 +65,9 @@ export async function bootstrapServer(): Promise<
 
     expressApp.setGlobalPrefix('api');
 
-    // 🧩 Apply TenantContextMiddleware but exclude public routes
-    expressApp.use((req, res, next) => {
-      const url = req.url.toLowerCase();
-
-      const isPublic =
-        url.includes('/api/docs') ||
-        url.includes('/swagger-ui') ||
-        url.includes('/api-json') ||
-        url.startsWith('/favicon') ||
-        url.startsWith('/auth/login') ||
-        url.startsWith('/api/auth/login') ||
-        url.startsWith('/auth/register') ||
-        url.startsWith('/api/auth/register') ||
-        url.startsWith('/tenants');
-
-      if (isPublic) return next();
-
-      const tenantContext = expressApp.get(TenantContextMiddleware);
-      (tenantContext as any).use(req as any, res, next);
-    });
+    // 🧩 Apply TenantContextMiddleware globally (public routes akan di-handle oleh middleware).
+    const tenantMiddleware = expressApp.get(TenantContextMiddleware);
+    expressApp.use(tenantMiddleware.use.bind(tenantMiddleware));
 
     // 📘 Swagger hanya aktif di development
     if (process.env.NODE_ENV !== 'production') {
@@ -154,26 +137,9 @@ export async function bootstrapServer(): Promise<
 
   fastifyApp.setGlobalPrefix('api');
 
-  // 🧩 TenantContextMiddleware (Fastify) — exclude public routes
-  const tenantContext = fastifyApp.get(TenantContextMiddleware);
-  fastifyApp.use((req, res, next) => {
-    const url = req.url.toLowerCase();
-
-    const isPublic =
-      url.includes('/api/docs') ||
-      url.includes('/swagger-ui') ||
-      url.includes('/api-json') ||
-      url.startsWith('/favicon') ||
-      url.startsWith('/auth/login') ||
-      url.startsWith('/api/auth/login') ||
-      url.startsWith('/auth/register') ||
-      url.startsWith('/api/auth/register') ||
-      url.startsWith('/tenants');
-
-    if (isPublic) return next();
-
-    (tenantContext as any).use(req as any, res, next);
-  });
+  // 🧩 TenantContextMiddleware (Fastify) — diaplikasikan secara global.
+  const fastifyTenantMiddleware = fastifyApp.get(TenantContextMiddleware);
+  fastifyApp.use(fastifyTenantMiddleware.use.bind(fastifyTenantMiddleware));
 
   // 📘 Swagger
   if (process.env.NODE_ENV !== 'production') {
