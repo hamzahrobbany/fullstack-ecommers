@@ -55,13 +55,13 @@ export class TenantsService {
   // 🔍 FIND ONE BY CODE
   // ===========================================================
   async findByCode(code: string) {
-    if (!code) throw new BadRequestException('Kode tenant wajib diisi');
-    const tenant = await this.orm.tenant.findUnique({
-      where: { code: code.toLowerCase().trim() },
+    if (!code) {
+      return null;
+    }
+    const normalized = code.toLowerCase().trim();
+    return this.prisma.tenant.findUnique({
+      where: { code: normalized },
     });
-    if (!tenant)
-      throw new NotFoundException(`Tenant dengan kode "${code}" tidak ditemukan`);
-    return tenant;
   }
 
   // ===========================================================

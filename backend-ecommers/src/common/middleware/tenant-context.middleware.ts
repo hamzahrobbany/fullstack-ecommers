@@ -68,9 +68,9 @@ export class TenantContextMiddleware implements NestMiddleware {
 
     try {
       // 🧠 Deteksi UUID vs Code
-      const isUuid = /^[0-9a-fA-F-]{36}$/.test(tenantId);
+      const isUuid = this.looksLikeUuid(tenantId);
       const tenant = isUuid
-        ? await this.tenantsService.findById(tenantId)
+        ? await this.tenantsService.findById(tenantId).catch(() => null)
         : await this.tenantsService.findByCode(tenantId);
 
       if (!tenant) {
@@ -99,7 +99,7 @@ export class TenantContextMiddleware implements NestMiddleware {
   }
 
   private getTenantIdFromHeader(req: RequestLike): string | null {
-    const headers: HeadersRecord = req.headers ?? {};
+    const headers: HeadersRecord = this.mergeHeaders(req);
     const header = headers['x-tenant-id'] ?? headers['X-Tenant-ID'];
     return Array.isArray(header)
       ? this.normalizeIdentifier(header[0])
@@ -110,7 +110,11 @@ export class TenantContextMiddleware implements NestMiddleware {
     if (req.cookies?.tenant_id) {
       return this.normalizeIdentifier(req.cookies.tenant_id);
     }
-    const cookieHeader = (req.headers ?? {})['cookie'];
+    const headers = this.mergeHeaders(req);
+    const cookieHeaderValue = headers?.cookie ?? headers?.Cookie;
+    const cookieHeader = Array.isArray(cookieHeaderValue)
+      ? cookieHeaderValue.join(';')
+      : cookieHeaderValue;
     if (typeof cookieHeader === 'string') {
       const cookies = cookieHeader.split(';');
       for (const cookie of cookies) {
@@ -150,5 +154,18 @@ export class TenantContextMiddleware implements NestMiddleware {
       }
     }
     return url.startsWith('/') ? url : `/${url}`;
+  }
+
+  private mergeHeaders(req: RequestLike): HeadersRecord {
+    return {
+      ...(req.headers ?? {}),
+      ...(req.raw?.headers ?? {}),
+    };
+  }
+
+  private looksLikeUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 }

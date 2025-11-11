@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/kyClient';
+import { api } from '@/lib/api-client';
 import { Product } from '@/lib/schema/product';
 
 export function useProducts() {
