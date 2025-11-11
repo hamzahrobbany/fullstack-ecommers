@@ -43,6 +43,10 @@ export const api = ky.create({
           request.headers.set('X-Tenant-ID', tenantId);
         }
 
+        if (!request.headers.has('Accept')) {
+          request.headers.set('Accept', 'application/json');
+        }
+
         if (!request.headers.has('Content-Type')) {
           request.headers.set('Content-Type', 'application/json');
         }

@@ -1,166 +1,252 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NestMiddleware,
 } from '@nestjs/common';
-import type { NextFunction, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
+
 import { TenantsService } from '@/modules/tenants/tenants.service';
 import type { Tenant } from '@/modules/tenants/entities/tenant.entity';
 
-type HeadersRecord = Record<string, string | string[] | undefined>;
-
-interface TenantCarrier {
+export interface TenantCarrier {
   tenant?: Tenant | null;
   tenantId?: string | null;
 }
 
-interface RequestLike extends TenantCarrier {
+type HeadersRecord = Record<string, string | string[] | undefined>;
+
+type FastifyLikeRequest = {
   headers?: HeadersRecord;
   cookies?: Record<string, string>;
-  url?: string;
   originalUrl?: string;
+  url?: string;
   method?: string;
-  user?: TenantCarrier & Record<string, unknown>;
-  raw?: (TenantCarrier & {
-    headers?: HeadersRecord;
-    cookies?: Record<string, string>;
-    url?: string;
-    originalUrl?: string;
-  }) &
-    Record<string, unknown>;
-}
+  raw?: (TenantCarrier &
+    Record<string, unknown> & {
+      headers?: HeadersRecord;
+      cookies?: Record<string, string>;
+      originalUrl?: string;
+      url?: string;
+      method?: string;
+      user?: TenantCarrier & Record<string, unknown>;
+    }) | null;
+  user?: (TenantCarrier & Record<string, unknown>) | null;
+};
+
+export type TenantAwareRequest = Partial<Request> & FastifyLikeRequest & TenantCarrier;
+
+type ResponseLike = Response | Record<string, unknown>;
 
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
-  private readonly publicRoutes = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/tenants/register',
-    '/api/docs',
-    '/api-json',
-    '/swagger-ui',
-    '/favicon',
+  private readonly logger = new Logger(TenantContextMiddleware.name);
+
+  private readonly publicRouteMatchers: RegExp[] = [
+    /^\/?$/i,
+    /^\/api\/(auth)(\/|$)/i,
+    /^\/api\/(tenants)(\/|$)/i,
+    /^\/api\/(debug)(\/|$)/i,
+    /^\/api\/(docs)(\/|$)/i,
+    /^\/api\/(docs-json)(\/|$)/i,
+    /^\/api-json(\/|$)/i,
+    /^\/swagger-ui(\/|$)/i,
+    /^\/favicon(\.ico)?$/i,
   ];
 
   constructor(private readonly tenantsService: TenantsService) {}
 
   async use(
-    req: RequestLike,
-    res: Response | Record<string, unknown>,
+    req: TenantAwareRequest,
+    _res: ResponseLike,
     next: NextFunction,
   ): Promise<void> {
-    const path = this.getRequestPath(req).toLowerCase();
+    const method = this.getRequestMethod(req);
+    const path = this.getRequestPath(req);
 
-    if (this.isPublicRoute(path)) {
+    if (this.isPublicRoute(path) || method === 'OPTIONS') {
       this.attachTenant(req, null);
+      this.logger.debug(`${method} ${path} | public route, skipping tenant context`);
       return next();
     }
 
-    const tenantId =
+    const tenantIdentifier =
       this.getTenantIdFromHeader(req) ?? this.getTenantIdFromCookie(req);
 
-    console.log(`[TenantMiddleware] ${req.method} ${path} | TenantID:`, tenantId);
+    this.logger.debug(
+      `${method} ${path} | tenant identifier: ${tenantIdentifier ?? 'none'}`,
+    );
 
-    if (!tenantId) {
+    if (!tenantIdentifier) {
       this.attachTenant(req, null);
       return next(new BadRequestException('Tenant context tidak ditemukan'));
     }
 
     try {
-      // 🧠 Deteksi UUID vs Code
-      const isUuid = this.looksLikeUuid(tenantId);
-      const tenant = isUuid
-        ? await this.tenantsService.findById(tenantId).catch(() => null)
-        : await this.tenantsService.findByCode(tenantId);
+      const tenant = await this.resolveTenant(tenantIdentifier);
 
       if (!tenant) {
         this.attachTenant(req, null);
         return next(
           new BadRequestException(
-            `Tenant tidak valid atau tidak ditemukan (ID/Code: ${tenantId})`,
+            `Tenant tidak valid atau tidak ditemukan (ID/Code: ${tenantIdentifier})`,
           ),
         );
       }
 
       this.attachTenant(req, tenant);
-      console.log('✅ TenantContextMiddleware aktif:', tenant.id, tenant.code);
+      this.logger.debug(
+        `${method} ${path} | tenant resolved => ${tenant.id} (${tenant.code})`,
+      );
       return next();
     } catch (error) {
-      console.error('❌ TenantContextMiddleware error:', error);
+      const err = error as Error;
+      this.logger.error(
+        `TenantContextMiddleware error: ${err.message}`,
+        err.stack ?? undefined,
+      );
       this.attachTenant(req, null);
       return next(new BadRequestException('Tenant tidak valid'));
     }
   }
 
   private isPublicRoute(path: string): boolean {
-    return this.publicRoutes.some(
-      (route) => path === route || path.startsWith(`${route}/`),
-    );
+    return this.publicRouteMatchers.some((pattern) => pattern.test(path));
   }
 
-  private getTenantIdFromHeader(req: RequestLike): string | null {
-    const headers: HeadersRecord = this.mergeHeaders(req);
-    const header = headers['x-tenant-id'] ?? headers['X-Tenant-ID'];
-    return Array.isArray(header)
-      ? this.normalizeIdentifier(header[0])
-      : this.normalizeIdentifier(header as string);
+  private getRequestMethod(req: TenantAwareRequest): string {
+    const method =
+      req.method ??
+      (typeof req.raw === 'object' && req.raw && 'method' in req.raw
+        ? String((req.raw as { method?: string }).method)
+        : undefined) ??
+      'GET';
+    return method.toUpperCase();
   }
 
-  private getTenantIdFromCookie(req: RequestLike): string | null {
+  private getRequestPath(req: TenantAwareRequest): string {
+    const rawUrl =
+      typeof req.raw === 'object' && req.raw
+        ? ('originalUrl' in req.raw && typeof req.raw.originalUrl === 'string'
+            ? req.raw.originalUrl
+            : 'url' in req.raw && typeof req.raw.url === 'string'
+              ? req.raw.url
+              : undefined)
+        : undefined;
+    const url = req.originalUrl ?? req.url ?? rawUrl ?? '/';
+    const normalized = url.startsWith('http://') || url.startsWith('https://')
+      ? this.safeParseUrl(url)
+      : url;
+
+    const pathname = normalized.split('?')[0];
+    return pathname.startsWith('/') ? pathname : `/${pathname}`;
+  }
+
+  private safeParseUrl(value: string): string {
+    try {
+      const parsed = new URL(value);
+      return parsed.pathname || '/';
+    } catch {
+      return '/';
+    }
+  }
+
+  private mergeHeaders(req: TenantAwareRequest): HeadersRecord {
+    return {
+      ...(req.headers ?? {}),
+      ...((req.raw && typeof req.raw === 'object' && 'headers' in req.raw
+        ? (req.raw as { headers?: HeadersRecord }).headers
+        : undefined) ?? {}),
+    };
+  }
+
+  private getTenantIdFromHeader(req: TenantAwareRequest): string | null {
+    const headers = this.mergeHeaders(req);
+    const value = headers['x-tenant-id'] ?? headers['X-Tenant-ID'];
+    if (Array.isArray(value)) {
+      return this.normalizeIdentifier(value[0]);
+    }
+    return this.normalizeIdentifier(value as string | undefined);
+  }
+
+  private getTenantIdFromCookie(req: TenantAwareRequest): string | null {
     if (req.cookies?.tenant_id) {
       return this.normalizeIdentifier(req.cookies.tenant_id);
     }
+
     const headers = this.mergeHeaders(req);
-    const cookieHeaderValue = headers?.cookie ?? headers?.Cookie;
-    const cookieHeader = Array.isArray(cookieHeaderValue)
-      ? cookieHeaderValue.join(';')
-      : cookieHeaderValue;
-    if (typeof cookieHeader === 'string') {
-      const cookies = cookieHeader.split(';');
-      for (const cookie of cookies) {
-        const [name, value] = cookie.split('=').map((part) => part?.trim());
-        if (name === 'tenant_id' && value) {
-          return this.normalizeIdentifier(decodeURIComponent(value));
-        }
+    const cookieHeader = headers.cookie ?? headers.Cookie;
+
+    const rawCookie = Array.isArray(cookieHeader)
+      ? cookieHeader.join(';')
+      : cookieHeader;
+
+    if (typeof rawCookie !== 'string') {
+      return null;
+    }
+
+    for (const cookiePart of rawCookie.split(';')) {
+      const [name, value] = cookiePart.split('=').map((part) => part?.trim());
+      if (name === 'tenant_id' && value) {
+        return this.normalizeIdentifier(decodeURIComponent(value));
       }
     }
+
     return null;
   }
 
-  private attachTenant(req: RequestLike, tenant: Tenant | null) {
-    const tenantId = tenant?.id ?? null;
-    req.tenant = tenant;
-    req.tenantId = tenantId;
-    if (req.raw) Object.assign(req.raw, { tenant, tenantId });
-    if (req.user) Object.assign(req.user, { tenant, tenantId });
-  }
+  private async resolveTenant(identifier: string): Promise<Tenant | null> {
+    const looksUuid = this.looksLikeUuid(identifier);
 
-  private normalizeIdentifier(value?: string | null): string | null {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
-  private getRequestPath(req: RequestLike): string {
-    const rawUrl = req.raw?.url;
-    const url =
-      req.originalUrl ?? req.url ?? (typeof rawUrl === 'string' ? rawUrl : '') ?? '';
-    if (!url) return '/';
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (looksUuid) {
       try {
-        return new URL(url).pathname || '/';
-      } catch {
-        return '/';
+        return await this.tenantsService.findById(identifier);
+      } catch (error) {
+        this.logger.debug(
+          `Tenant lookup by ID failed for ${identifier}: ${(error as Error).message}`,
+        );
+        return null;
       }
     }
-    return url.startsWith('/') ? url : `/${url}`;
+
+    try {
+      return (await this.tenantsService.findByCode(identifier)) ?? null;
+    } catch (error) {
+      this.logger.debug(
+        `Tenant lookup by code failed for ${identifier}: ${(error as Error).message}`,
+      );
+      return null;
+    }
   }
 
-  private mergeHeaders(req: RequestLike): HeadersRecord {
-    return {
-      ...(req.headers ?? {}),
-      ...(req.raw?.headers ?? {}),
-    };
+  private attachTenant(req: TenantAwareRequest, tenant: Tenant | null): void {
+    const tenantId = tenant?.id ?? null;
+
+    req.tenant = tenant;
+    req.tenantId = tenantId;
+
+    if (req.raw && typeof req.raw === 'object') {
+      Object.assign(req.raw, { tenant, tenantId });
+      const rawUser = (req.raw as { user?: TenantCarrier | null }).user;
+      if (rawUser && typeof rawUser === 'object') {
+        Object.assign(rawUser, { tenant, tenantId });
+      }
+    }
+
+    if (!req.user || typeof req.user !== 'object') {
+      req.user = { tenant, tenantId };
+    } else {
+      Object.assign(req.user, { tenant, tenantId });
+    }
+  }
+
+  private normalizeIdentifier(value?: string): string | null {
+    if (!value || typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private looksLikeUuid(value: string): boolean {

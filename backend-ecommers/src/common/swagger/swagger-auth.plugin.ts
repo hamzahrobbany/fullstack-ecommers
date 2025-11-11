@@ -1,5 +1,4 @@
 type SwaggerHeaders = Record<string, string>;
-
 /**
  * Plugin Swagger custom untuk secara otomatis menambahkan header otentikasi & tenant.
  * Header diambil dari `localStorage` agar pengalaman testing di Swagger UI konsisten.
@@ -16,25 +15,17 @@ export function swaggerAuthPlugin() {
                 const headers: SwaggerHeaders = { ...(req.headers ?? {}) };
 
                 try {
-                  const storage =
-                    typeof window !== 'undefined'
-                      ? window.localStorage
-                      : undefined;
-                  const bearerToken =
-                    storage?.getItem('swagger_token') ??
-                    storage?.getItem('access_token') ??
-                    undefined;
-                  const tenantId =
-                    storage?.getItem('swagger_tenant') ??
-                    storage?.getItem('tenant_id') ??
-                    undefined;
+                  if (typeof window !== 'undefined' && window.localStorage) {
+                    const token = window.localStorage.getItem('swagger_token');
+                    const tenantId = window.localStorage.getItem('swagger_tenant');
 
-                  if (bearerToken && !headers.Authorization) {
-                    headers.Authorization = `Bearer ${bearerToken}`;
-                  }
+                    if (token && !headers.Authorization) {
+                      headers.Authorization = token;
+                    }
 
-                  if (tenantId && !headers['X-Tenant-ID']) {
-                    headers['X-Tenant-ID'] = tenantId;
+                    if (tenantId && !headers['X-Tenant-ID']) {
+                      headers['X-Tenant-ID'] = tenantId;
+                    }
                   }
                 } catch (error) {
                   console.warn(

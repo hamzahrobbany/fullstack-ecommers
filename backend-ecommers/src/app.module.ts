@@ -1,4 +1,4 @@
-import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { TenantContextMiddleware } from '@/common/middleware/tenant-context.middleware';
@@ -23,16 +23,6 @@ import { PrismaModule } from '@/prisma/prisma.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(TenantContextMiddleware)
-      .exclude(
-        { path: 'api/docs', method: RequestMethod.ALL },
-        { path: 'api/docs/*', method: RequestMethod.ALL },
-        { path: 'api-json', method: RequestMethod.ALL },
-        { path: 'swagger-ui', method: RequestMethod.ALL },
-        { path: 'swagger-ui/*', method: RequestMethod.ALL },
-        { path: 'favicon.ico', method: RequestMethod.ALL },
-      )
-      .forRoutes('*');
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
   }
 }

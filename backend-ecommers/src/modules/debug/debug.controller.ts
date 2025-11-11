@@ -1,14 +1,15 @@
 import { Controller, Get, Req } from '@nestjs/common';
-import { Request } from 'express';
+
+import type { TenantAwareRequest } from '@/common/middleware/tenant-context.middleware';
 
 @Controller('debug')
 export class DebugController {
   @Get('tenant')
-  getTenant(@Req() req: Request) {
+  getTenant(@Req() req: TenantAwareRequest) {
     return {
       message: 'TenantContextMiddleware test',
       tenantId: req.tenantId ?? null,
-      tenant: req.tenant || null,
+      tenant: req.tenant ?? null,
     };
   }
 }
