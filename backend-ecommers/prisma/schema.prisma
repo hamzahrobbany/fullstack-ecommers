@@ -11,21 +11,24 @@ datasource db {
 /// 🏢 TENANT (Toko / Store)
 /// ==========================
 model Tenant {
-  id        String   @id @default(uuid())
-  code      String   @unique
+  id        String    @id @default(uuid())
+  code      String    @unique
   name      String
-  domain    String?  @unique
+  domain    String?   @unique
   address   String?
   email     String?
   phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // 👈 Soft delete
 
   // Relasi
   products    Product[]
   subscribers Subscriber[]
   users       User[]
   orders      Order[]
+  stocks      Stock[]
+  orderItems  OrderItem[]
 }
 
 /// ==========================
@@ -38,13 +41,15 @@ model User {
   email         String         @unique
   password      String
   role          Role           @default(CUSTOMER)
-  refreshTokens RefreshToken[] // relasi ke token
+  refreshTokens RefreshToken[]
+  orders        Order[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime? // 👈 Soft delete
 
-  // Relasi
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
-  orders Order[]
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 /// ==========================
@@ -64,36 +69,40 @@ model RefreshToken {
 /// ☕ PRODUCTS
 /// ==========================
 model Product {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenantId    String
   name        String
-  category    String?          // ✅ tambahkan field ini
+  category    String?
   description String?
   price       Int
-  stock       Int      @default(0) // ✅ tambahkan field ini
+  stock       Int       @default(0)
   image       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // 👈 Soft delete
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orderItems OrderItem[]
   stocks     Stock[]
+
+  @@index([tenantId])
 }
 
 /// ==========================
-/// 📦 STOCKS (dipisah per lokasi)
+/// 📦 STOCKS (Per lokasi)
 /// ==========================
 model Stock {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   productId String
   tenantId  String
   location  String?
-  quantity  Int      @default(0)
-  updatedAt DateTime @updatedAt
+  quantity  Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // 👈 Soft delete
 
-  // Relasi
-  product Product @relation(fields: [productId], references: [id])
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, productId])
@@ -111,9 +120,10 @@ model Subscriber {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
+  @@index([tenantId])
 }
 
 /// ==========================
@@ -127,31 +137,36 @@ model Order {
   status      OrderStatus @default(PENDING)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime? // 👈 Soft delete
 
-  // Relasi
-  tenant  Tenant      @relation(fields: [tenantId], references: [id])
-  user    User        @relation(fields: [userId], references: [id])
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   items   OrderItem[]
   payment Payment?
+
+  @@index([tenantId])
 }
 
 /// ==========================
 /// 🛒 ORDER ITEMS
 /// ==========================
 model OrderItem {
-  id        String @id @default(uuid())
+  id        String    @id @default(uuid())
   orderId   String
   productId String
   tenantId  String
   quantity  Int
   subtotal  Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // 👈 Soft delete
 
-  // Relasi
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([tenantId, orderId])
 }
 
 /// ==========================
@@ -166,8 +181,9 @@ model Payment {
   transactionId String?       @unique
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime? // 👈 Soft delete
 
-  order Order @relation(fields: [orderId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 /// ==========================
