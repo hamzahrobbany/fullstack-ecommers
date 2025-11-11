@@ -32,11 +32,6 @@ interface RequestLike extends TenantCarrier {
 
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
-  /**
-   * Rute publik yang tidak memerlukan tenant context.
-   * Gunakan lowercase untuk mempermudah pencocokan.
-   */
-
   private readonly publicRoutes = [
     '/api/auth/login',
     '/api/auth/register',
@@ -49,10 +44,6 @@ export class TenantContextMiddleware implements NestMiddleware {
 
   constructor(private readonly tenantsService: TenantsService) {}
 
-  /**
-   * Middleware utama yang menempelkan tenant ke setiap request.
-   * Prioritas sumber tenant: Header `X-Tenant-ID` → Cookie `tenant_id`.
-   */
   async use(
     req: RequestLike,
     res: Response | Record<string, unknown>,
@@ -68,54 +59,57 @@ export class TenantContextMiddleware implements NestMiddleware {
     const tenantId =
       this.getTenantIdFromHeader(req) ?? this.getTenantIdFromCookie(req);
 
+    console.log(`[TenantMiddleware] ${req.method} ${path} | TenantID:`, tenantId);
+
     if (!tenantId) {
       this.attachTenant(req, null);
-      return next(new BadRequestException('Tenant tidak valid'));
+      return next(new BadRequestException('Tenant context tidak ditemukan'));
     }
 
     try {
-      const tenant = (await this.tenantsService.findById(tenantId)) as Tenant;
-      this.attachTenant(req, tenant);
+      // 🧠 Deteksi UUID vs Code
+      const isUuid = /^[0-9a-fA-F-]{36}$/.test(tenantId);
+      const tenant = isUuid
+        ? await this.tenantsService.findById(tenantId)
+        : await this.tenantsService.findByCode(tenantId);
 
-      console.log('TenantContextMiddleware aktif:', tenantId);
+      if (!tenant) {
+        this.attachTenant(req, null);
+        return next(
+          new BadRequestException(
+            `Tenant tidak valid atau tidak ditemukan (ID/Code: ${tenantId})`,
+          ),
+        );
+      }
+
+      this.attachTenant(req, tenant);
+      console.log('✅ TenantContextMiddleware aktif:', tenant.id, tenant.code);
       return next();
-    } catch {
+    } catch (error) {
+      console.error('❌ TenantContextMiddleware error:', error);
       this.attachTenant(req, null);
       return next(new BadRequestException('Tenant tidak valid'));
     }
   }
 
-  /**
-   * Menentukan apakah rute saat ini merupakan rute publik.
-   */
   private isPublicRoute(path: string): boolean {
     return this.publicRoutes.some(
       (route) => path === route || path.startsWith(`${route}/`),
     );
   }
 
-  /**
-   * Mengambil tenantId dari header.
-   */
   private getTenantIdFromHeader(req: RequestLike): string | null {
     const headers: HeadersRecord = req.headers ?? {};
     const header = headers['x-tenant-id'] ?? headers['X-Tenant-ID'];
-
-    if (Array.isArray(header)) {
-      return this.normalizeIdentifier(header[0]);
-    }
-
-    return this.normalizeIdentifier(header as string);
+    return Array.isArray(header)
+      ? this.normalizeIdentifier(header[0])
+      : this.normalizeIdentifier(header as string);
   }
 
-  /**
-   * Mengambil tenantId dari cookie `tenant_id`.
-   */
   private getTenantIdFromCookie(req: RequestLike): string | null {
-    if (req.cookies && typeof req.cookies.tenant_id === 'string') {
+    if (req.cookies?.tenant_id) {
       return this.normalizeIdentifier(req.cookies.tenant_id);
     }
-
     const cookieHeader = (req.headers ?? {})['cookie'];
     if (typeof cookieHeader === 'string') {
       const cookies = cookieHeader.split(';');
@@ -126,50 +120,27 @@ export class TenantContextMiddleware implements NestMiddleware {
         }
       }
     }
-
     return null;
   }
 
-  /**
-   * Menempelkan tenant ke request (Express & Fastify).
-   */
   private attachTenant(req: RequestLike, tenant: Tenant | null) {
     const tenantId = tenant?.id ?? null;
-
     req.tenant = tenant;
     req.tenantId = tenantId;
-
-    if (req.raw) {
-      req.raw.tenant = tenant;
-      req.raw.tenantId = tenantId;
-    }
-
-    if (req.user) {
-      req.user.tenant = tenant;
-      req.user.tenantId = tenantId;
-    }
+    if (req.raw) Object.assign(req.raw, { tenant, tenantId });
+    if (req.user) Object.assign(req.user, { tenant, tenantId });
   }
 
-  /**
-   * Normalisasi tenantId agar tidak ada whitespace kosong.
-   */
   private normalizeIdentifier(value?: string | null): string | null {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
 
-  /**
-   * Mendapatkan path dari request (berfungsi untuk Express & Fastify).
-   */
   private getRequestPath(req: RequestLike): string {
     const rawUrl = req.raw?.url;
     const url =
-      req.originalUrl ??
-      req.url ??
-      (typeof rawUrl === 'string' ? rawUrl : '') ??
-      '';
-
+      req.originalUrl ?? req.url ?? (typeof rawUrl === 'string' ? rawUrl : '') ?? '';
     if (!url) return '/';
     if (url.startsWith('http://') || url.startsWith('https://')) {
       try {
@@ -178,7 +149,6 @@ export class TenantContextMiddleware implements NestMiddleware {
         return '/';
       }
     }
-
     return url.startsWith('/') ? url : `/${url}`;
   }
 }
