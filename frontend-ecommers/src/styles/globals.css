@@ -1,0 +1,9 @@
+@import 'antd/dist/reset.css';
+@import 'sonner/dist/style.css';
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #fafafa;
+}
