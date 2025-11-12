@@ -1,83 +1,49 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Button, Card, Form, Input, Typography } from 'antd';
-import { LockOutlined, MailOutlined, ShopOutlined } from '@ant-design/icons';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-
-interface LoginFormValues {
-  email: string;
-  password: string;
-  tenantCode: string;
-}
+import { useAuth } from "@/components/AuthProvider";
+import { useState } from "react";
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
+  const { handleLogin, error, isLoading } = useAuth();
+  const [form, setForm] = useState({ email: "", password: "", tenantCode: "salwa" });
 
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  const handleFinish = async (values: LoginFormValues) => {
-    setLoading(true);
-    try {
-      await login(values);
-      router.replace('/dashboard');
-    } finally {
-      setLoading(false);
-    }
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await handleLogin(form);
   };
 
-  if (isAuthenticated) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        minHeight: '80vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-      }}
-    >
-      <Card style={{ width: 420 }}>
-        <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: 32 }}>
-          Masuk ke Dashboard
-        </Typography.Title>
-        <Form layout="vertical" onFinish={handleFinish} requiredMark={false}>
-          <Form.Item
-            label="Email"
-            name="email"
-            rules={[{ required: true, message: 'Email wajib diisi' }]}
-          >
-            <Input prefix={<MailOutlined />} placeholder="john@contoh.com" type="email" />
-          </Form.Item>
-          <Form.Item
-            label="Password"
-            name="password"
-            rules={[{ required: true, message: 'Password wajib diisi' }]}
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="••••••" />
-          </Form.Item>
-          <Form.Item
-            label="Kode Tenant"
-            name="tenantCode"
-            rules={[{ required: true, message: 'Kode tenant wajib diisi' }]}
-          >
-            <Input prefix={<ShopOutlined />} placeholder="contoh: kopiku" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={loading}>
-            Masuk
-          </Button>
-        </Form>
-      </Card>
+    <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
+      <h1 className="mb-6 text-center text-2xl font-semibold">Masuk</h1>
+      <form className="space-y-4" onSubmit={submit}>
+        <input
+          className="w-full rounded border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+          placeholder="Email"
+          value={form.email}
+          onChange={(event) => setForm({ ...form, email: event.target.value })}
+        />
+        <input
+          type="password"
+          className="w-full rounded border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+          placeholder="Password"
+          value={form.password}
+          onChange={(event) => setForm({ ...form, password: event.target.value })}
+        />
+        <input
+          className="w-full rounded border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+          placeholder="Tenant Code (contoh: salwa)"
+          value={form.tenantCode}
+          onChange={(event) => setForm({ ...form, tenantCode: event.target.value })}
+        />
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full rounded bg-blue-600 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+        >
+          {isLoading ? "Memproses..." : "Masuk"}
+        </button>
+      </form>
+      {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
     </div>
   );
 }

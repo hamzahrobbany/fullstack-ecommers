@@ -1,43 +1,17 @@
-import './globals.css';
-import AppProviders from '@/providers/AppProviders';
-import Header from '@/components/Header';
-import { Layout } from 'antd';
-import type { Metadata } from 'next';
+import "./globals.css";
+import type { Metadata } from "next";
+import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
-  title: 'frontend-ecommers',
-  description: 'E-commers frontend with Next.js + Ant Design + React Query + Zod',
+  title: "Kopiq E-Commerce",
+  description: "Multi-tenant e-commerce dashboard and storefront.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id">
-      <body suppressHydrationWarning>
-        <AppProviders>
-          <Layout style={{ minHeight: '100vh' }}>
-            <Header />
-
-            {/* gunakan main biasa agar SSR stabil */}
-            <main
-              style={{
-                padding: 24,
-                maxWidth: 1200,
-                margin: '0 auto',
-                width: '100%',
-              }}
-            >
-              {children}
-            </main>
-
-            <footer style={{ textAlign: 'center', padding: 16, color: '#888' }}>
-              © {new Date().getFullYear()} frontend-ecommers
-            </footer>
-          </Layout>
-        </AppProviders>
+      <body className="min-h-screen bg-neutral-50 text-neutral-900">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

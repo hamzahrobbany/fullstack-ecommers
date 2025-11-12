@@ -1,12 +1,7 @@
-'use client';
+"use client";
 
-import { useContext } from 'react';
-import { AuthContext } from '@/components/AuthProvider';
+import { useAuth as useAuthContext } from "@/components/AuthProvider";
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth hanya bisa digunakan di dalam AuthProvider');
-  }
-  return context;
+  return useAuthContext();
 }
