@@ -1,9 +1,10 @@
 /* ============================================================================
- * 📘 Swagger Plugins for E-Commers API
+ * 📘 Swagger Plugins for E-Commers API (Full Auto Auth)
  * ============================================================================
- * Fungsi:
- * - Simpan token & tenant dari hasil login otomatis.
- * - Tambahkan header Authorization dan X-Tenant-ID ke semua request.
+ * Fitur:
+ * 1️⃣ Simpan token & tenant ke localStorage saat login.
+ * 2️⃣ Isi otomatis field "Authorize" di Swagger UI.
+ * 3️⃣ Sisipkan header Authorization & X-Tenant-ID di semua request.
  * ============================================================================
  */
 export function swaggerAuthPlugin() {
@@ -12,60 +13,53 @@ export function swaggerAuthPlugin() {
       statePlugins: {
         spec: {
           wrapActions: {
-            // ✅ Inject headers otomatis ke semua request
             executeRequest: (original: any) => async (req: any) => {
               try {
-                // Ambil token & tenant dari localStorage
                 const token = window.localStorage.getItem('swagger_token');
                 const tenant = window.localStorage.getItem('swagger_tenant');
-
                 req.headers = req.headers || {};
 
                 if (token && !req.headers.Authorization) {
                   req.headers.Authorization = `Bearer ${token}`;
                 }
-
                 if (tenant && !req.headers['X-Tenant-ID']) {
                   req.headers['X-Tenant-ID'] = tenant;
                 }
 
-                console.log('[SwaggerAuthPlugin]', 'Token & Tenant attached:', {
+                console.log('[SwaggerAuthPlugin] Attached headers:', {
                   hasToken: !!token,
                   hasTenant: !!tenant,
                 });
               } catch (err) {
                 console.warn('[SwaggerAuthPlugin] Failed to attach headers:', err);
               }
-
               return original(req);
             },
           },
         },
-        // ✅ Simpan token & tenant otomatis setelah login
-        auth: {
-          wrapActions: {
-            authorizeRequest: (oriAction: any) => (payload: any) => {
-              if (payload?.auth?.name === 'Bearer') {
-                const token = payload.auth.value;
-                if (token) {
-                  window.localStorage.setItem('swagger_token', token.replace(/^Bearer\s+/i, ''));
-                  console.log('[SwaggerAuthPlugin] Token saved:', token);
-                }
-              }
-              return oriAction(payload);
-            },
-          },
-        },
-        // ✅ Tangkap response login dan simpan token + tenant
+
         response: {
           wrapActions: {
             receive: (ori: any) => (res: any) => {
               try {
                 const body = res?.data;
                 if (body?.tokens?.accessToken && body?.tenant?.id) {
-                  window.localStorage.setItem('swagger_token', body.tokens.accessToken);
-                  window.localStorage.setItem('swagger_tenant', body.tenant.id);
+                  const token = body.tokens.accessToken;
+                  const tenant = body.tenant.id;
+
+                  // Simpan ke localStorage
+                  window.localStorage.setItem('swagger_token', token);
+                  window.localStorage.setItem('swagger_tenant', tenant);
+
                   console.log('[SwaggerAuthPlugin] Saved token & tenant automatically');
+
+                  // Inject ke state internal Swagger (biar muncul di Authorize box)
+                  if (system?.authActions?.authorize) {
+                    system.authActions.authorize({
+                      Bearer: { name: 'Bearer', schema: { type: 'apiKey' }, value: `Bearer ${token}` },
+                    });
+                    console.log('[SwaggerAuthPlugin] Injected token into Swagger Authorize UI');
+                  }
                 }
               } catch (e) {
                 console.warn('[SwaggerAuthPlugin] Failed to parse login response');

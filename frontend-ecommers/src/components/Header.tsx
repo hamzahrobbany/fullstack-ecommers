@@ -34,7 +34,7 @@ export default function Header() {
           {
             key: 'login',
             icon: <LoginOutlined />,
-            label: <Link href="/(auth)/login">Masuk</Link>,
+            label: <Link href="/login">Masuk</Link>,
           },
         ]}
         style={{ marginLeft: 24, flex: 1, minWidth: 0 }}
