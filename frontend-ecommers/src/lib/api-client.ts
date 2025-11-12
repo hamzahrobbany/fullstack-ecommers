@@ -1,8 +1,9 @@
-import ky, { Options } from 'ky';
+import ky, { type KyInstance, type Options } from 'ky';
 import { getCookie } from 'cookies-next';
 
 const DEFAULT_TIMEOUT = 10_000;
-const API_PREFIX = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') || 'http://localhost:3000/api';
 
 const normalizeCookieValue = (value: unknown): string | null => {
   if (typeof value !== 'string') {
@@ -28,13 +29,14 @@ const buildAuthorizationHeader = (token: string | null): string | null => {
   if (!normalized) {
     return null;
   }
+
   return normalized.startsWith('Bearer ')
     ? normalized
     : `Bearer ${normalized}`;
 };
 
-export const api = ky.create({
-  prefixUrl: API_PREFIX,
+export const apiClient: KyInstance = ky.create({
+  prefixUrl: API_URL,
   credentials: 'include',
   timeout: DEFAULT_TIMEOUT,
   hooks: {
@@ -73,8 +75,10 @@ export const api = ky.create({
   },
 });
 
-export type ApiClient = typeof api;
+export type ApiClient = KyInstance;
 
-export const createApiClient = (options?: Options): ApiClient => {
-  return api.extend(options ?? {});
+export const api: KyInstance = apiClient;
+
+export const createApiClient = (options?: Options): KyInstance => {
+  return apiClient.extend(options ?? {});
 };

@@ -74,7 +74,8 @@ export async function bootstrapServer(): Promise<
         .setTitle('E-Commerce API')
         .setDescription('Dokumentasi REST API Backend E-Commerce')
         .setVersion('1.0')
-        .addBearerAuth();
+        .addBearerAuth()
+        .addServer('/api');
 
       const swaggerBuilder =
         typeof (builder as any).addApiHeader === 'function'
@@ -93,19 +94,7 @@ export async function bootstrapServer(): Promise<
       const swaggerOptions: SwaggerCustomOptions = {
         swaggerOptions: {
           persistAuthorization: true,
-          plugins: [swaggerAuthPlugin()],
-          requestInterceptor: (req) => {
-            try {
-              const token = window?.localStorage?.getItem('swagger_token');
-              const tenant = window?.localStorage?.getItem('swagger_tenant');
-              req.headers = req.headers || {};
-              if (token) req.headers.Authorization = `Bearer ${token}`;
-              if (tenant) req.headers['X-Tenant-ID'] = tenant;
-            } catch (e) {
-              console.warn('[Swagger] Failed to attach headers:', e);
-            }
-            return req;
-          },
+          plugins: [swaggerAuthPlugin],
         },
         customSiteTitle: 'E-Commerce API Docs',
       };
@@ -148,7 +137,8 @@ export async function bootstrapServer(): Promise<
       .setTitle('E-Commerce API')
       .setDescription('Dokumentasi REST API Backend E-Commerce')
       .setVersion('1.0')
-      .addBearerAuth();
+      .addBearerAuth()
+      .addServer('/api');
 
     const swaggerBuilder =
       typeof (builder as any).addApiHeader === 'function'
@@ -167,19 +157,7 @@ export async function bootstrapServer(): Promise<
     const swaggerOptions: SwaggerCustomOptions = {
       swaggerOptions: {
         persistAuthorization: true,
-        plugins: [swaggerAuthPlugin()],
-        requestInterceptor: (req) => {
-          try {
-            const token = window?.localStorage?.getItem('swagger_token');
-            const tenant = window?.localStorage?.getItem('swagger_tenant');
-            req.headers = req.headers || {};
-            if (token) req.headers.Authorization = `Bearer ${token}`;
-            if (tenant) req.headers['X-Tenant-ID'] = tenant;
-          } catch (e) {
-            console.warn('[Swagger] Failed to attach headers:', e);
-          }
-          return req;
-        },
+        plugins: [swaggerAuthPlugin],
       },
       customSiteTitle: 'E-Commerce API Docs',
     };

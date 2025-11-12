@@ -2,6 +2,8 @@ import { Controller, Get, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
 type DebugRequest = Request & {
+  tenantId?: string | null;
+  tenant?: unknown;
   tenantSource?: string | null;
   tenantHostname?: string | null;
   tenantSubdomain?: string | null;

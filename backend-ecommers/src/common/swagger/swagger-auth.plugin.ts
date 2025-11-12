@@ -1,8 +1,5 @@
 type SwaggerHeaders = Record<string, string>;
-/**
- * Plugin Swagger custom untuk secara otomatis menambahkan header otentikasi & tenant.
- * Header diambil dari `localStorage` agar pengalaman testing di Swagger UI konsisten.
- */
+
 const normalizeBearer = (token: string | null): string | null => {
   if (!token) {
     return null;
@@ -16,68 +13,66 @@ const normalizeBearer = (token: string | null): string | null => {
   return trimmed.startsWith('Bearer ') ? trimmed : `Bearer ${trimmed}`;
 };
 
-export function swaggerAuthPlugin() {
-  return function swaggerAuthPluginFactory() {
-    return {
-      statePlugins: {
-        spec: {
-          wrapActions: {
-            executeRequest:
-              (ori: (req: { headers?: SwaggerHeaders }) => Promise<unknown>) =>
-              async (req: { headers?: SwaggerHeaders }): Promise<unknown> => {
-                const headers: SwaggerHeaders = { ...(req.headers ?? {}) };
+const normalizeTenant = (tenant: string | null): string | null => {
+  if (!tenant) {
+    return null;
+  }
 
-                try {
-                  if (typeof window !== 'undefined' && window.localStorage) {
-                    const token =
-                      window.localStorage.getItem('swagger_token') ?? null;
-                    const tenantId =
-                      window.localStorage.getItem('swagger_tenant') ?? null;
+  const trimmed = tenant.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
-                    if (!token) {
-                      console.warn(
-                        '[SwaggerPlugin] localStorage.swagger_token belum diatur. ' +
-                          'Gunakan localStorage.setItem("swagger_token", "Bearer <token>")',
-                      );
-                    } else {
-                      const normalizedToken = normalizeBearer(token);
-                      if (normalizedToken) {
-                        headers.Authorization = normalizedToken;
-                      } else {
-                        console.warn(
-                          '[SwaggerPlugin] Nilai swagger_token tidak valid, lewati penyisipan Authorization',
-                        );
-                      }
-                    }
+const readLocalStorage = (key: string): string | null => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
 
-                    if (!tenantId) {
-                      console.warn(
-                        '[SwaggerPlugin] localStorage.swagger_tenant belum diatur. ' +
-                          'Gunakan localStorage.setItem("swagger_tenant", "<tenant>")',
-                      );
-                    } else {
-                      const normalizedTenant = tenantId.trim();
-                      if (normalizedTenant) {
-                        headers['X-Tenant-ID'] = normalizedTenant;
-                      } else {
-                        console.warn(
-                          '[SwaggerPlugin] Nilai swagger_tenant kosong setelah trim, lewati penyisipan X-Tenant-ID',
-                        );
-                      }
-                    }
+    return window.localStorage.getItem(key) ?? null;
+  } catch (error) {
+    console.warn(`[SwaggerPlugin] Gagal membaca localStorage key "${key}"`, error);
+    return null;
+  }
+};
+
+export function swaggerAuthPlugin(_system?: unknown): Record<string, unknown> {
+  return {
+    statePlugins: {
+      spec: {
+        wrapActions: {
+          executeRequest:
+            (original: (req: { headers?: SwaggerHeaders }) => Promise<unknown>) =>
+            async (req: { headers?: SwaggerHeaders }): Promise<unknown> => {
+              const nextReq: { headers: SwaggerHeaders } = {
+                ...req,
+                headers: { ...(req.headers ?? {}) },
+              };
+
+              try {
+                const token = readLocalStorage('swagger_token');
+                const tenantId = readLocalStorage('swagger_tenant');
+
+                if (token && !nextReq.headers.Authorization) {
+                  const normalizedToken = normalizeBearer(token);
+                  if (normalizedToken) {
+                    nextReq.headers.Authorization = normalizedToken;
                   }
-                } catch (error) {
-                  console.warn(
-                    '[SwaggerPlugin] Gagal menambahkan header auth/tenant:',
-                    error,
-                  );
                 }
 
-                return ori({ ...req, headers });
-              },
-          },
+                if (tenantId && !nextReq.headers['X-Tenant-ID']) {
+                  const normalizedTenant = normalizeTenant(tenantId);
+                  if (normalizedTenant) {
+                    nextReq.headers['X-Tenant-ID'] = normalizedTenant;
+                  }
+                }
+              } catch (error) {
+                console.warn('[SwaggerPlugin] Header injection failed:', error);
+              }
+
+              return original(nextReq);
+            },
         },
       },
-    };
+    },
   };
 }
