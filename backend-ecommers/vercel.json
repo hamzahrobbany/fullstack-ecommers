@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "pnpm install --no-frozen-lockfile && pnpm build",
+  "buildCommand": "pnpm install --no-frozen-lockfile && pnpm build:vercel",
   "builds": [
     { "src": "dist/vercel.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "dist/vercel.js" }
+    { "src": "/api/(.*)", "dest": "dist/vercel.js" }
   ],
   "env": {
     "NODE_ENV": "production"

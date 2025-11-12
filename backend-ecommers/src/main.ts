@@ -17,6 +17,7 @@ import {
 
 // 🧩 Middleware
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
+import { logRegisteredRoutes } from './utils/log-registered-routes';
 
 // 🌐 Fastify plugins
 import fastifyHelmet from '@fastify/helmet';
@@ -119,6 +120,7 @@ export async function bootstrapServer(): Promise<
     }
 
     await expressApp.init();
+    logRegisteredRoutes(expressApp, 'ExpressRoutes');
     cachedApp = expressApp;
     return expressApp;
   }
