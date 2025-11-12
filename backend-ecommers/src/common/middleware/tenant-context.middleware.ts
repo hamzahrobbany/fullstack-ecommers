@@ -11,6 +11,7 @@ type TenantAwareRequest = Request & {
   tenantSource?: string | null;
   tenantHostname?: string | null;
   tenantSubdomain?: string | null;
+  tenantId?: string | null;
 };
 
 @Injectable()
@@ -100,6 +101,7 @@ export class TenantContextMiddleware implements NestMiddleware {
       request.tenantSource = tenantSource ?? null;
 
       if (this.debugEnabled) {
+        this.logger.debug(`TenantContext applied: ${request.tenantId}`);
         this.logger.debug(
           `TenantContext resolved tenantId='${tenant.id}' source='${
             tenantSource ?? 'unknown'

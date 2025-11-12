@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -7,21 +11,25 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(tenantId: string) {
+  findAll(tenantId: string | null) {
+    const validTenantId = this.ensureTenant(tenantId);
+
     return this.prisma.product.findMany({
-      where: { tenantId },
+      where: { tenantId: validTenantId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string, tenantId: string) {
-    return this.ensureProduct(id, tenantId);
+  async findOne(id: string, tenantId: string | null) {
+    const validTenantId = this.ensureTenant(tenantId);
+    return this.ensureProduct(id, validTenantId);
   }
 
-  create(tenantId: string, dto: CreateProductDto) {
+  create(tenantId: string | null, dto: CreateProductDto) {
+    const validTenantId = this.ensureTenant(tenantId);
     return this.prisma.product.create({
       data: {
-        tenantId,
+        tenantId: validTenantId,
         name: dto.name,
         category: dto.category,
         description: dto.description,
@@ -32,8 +40,9 @@ export class ProductsService {
     });
   }
 
-  async update(id: string, tenantId: string, dto: UpdateProductDto) {
-    await this.ensureProduct(id, tenantId);
+  async update(id: string, tenantId: string | null, dto: UpdateProductDto) {
+    const validTenantId = this.ensureTenant(tenantId);
+    await this.ensureProduct(id, validTenantId);
     return this.prisma.product.update({
       where: { id },
       data: {
@@ -43,8 +52,9 @@ export class ProductsService {
     });
   }
 
-  async delete(id: string, tenantId: string) {
-    await this.ensureProduct(id, tenantId);
+  async delete(id: string, tenantId: string | null) {
+    const validTenantId = this.ensureTenant(tenantId);
+    await this.ensureProduct(id, validTenantId);
     return this.prisma.product.delete({ where: { id } });
   }
 
@@ -60,5 +70,13 @@ export class ProductsService {
     }
 
     return product;
+  }
+
+  private ensureTenant(tenantId: string | null | undefined): string {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context tidak ditemukan.');
+    }
+
+    return tenantId;
   }
 }

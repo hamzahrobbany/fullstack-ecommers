@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 
 import { PrismaService } from '@/prisma/prisma.service';
 import { OrderStatus } from '@/prisma/enums';
@@ -7,9 +11,10 @@ import { OrderStatus } from '@/prisma/enums';
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(tenantId: string) {
+  async findAllByTenant(tenantId: string | null) {
+    const validTenantId = this.ensureTenant(tenantId);
     return this.prisma.order.findMany({
-      where: { tenantId },
+      where: { tenantId: validTenantId },
       include: {
         user: {
           select: { id: true, name: true, email: true },
@@ -28,9 +33,11 @@ export class OrdersService {
     });
   }
 
-  async findOne(id: string, tenantId: string) {
+  async findOneByTenant(id: string, tenantId: string | null) {
+    const validTenantId = this.ensureTenant(tenantId);
+
     const order = await this.prisma.order.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: validTenantId },
       include: {
         user: {
           select: { id: true, name: true, email: true },
@@ -54,8 +61,9 @@ export class OrdersService {
     return order;
   }
 
-  async updateStatus(id: string, tenantId: string, status: OrderStatus) {
-    await this.ensureOrderExists(id, tenantId);
+  async updateStatus(id: string, tenantId: string | null, status: OrderStatus) {
+    const validTenantId = this.ensureTenant(tenantId);
+    await this.ensureOrderExists(id, validTenantId);
 
     return this.prisma.order.update({
       where: { id },
@@ -68,9 +76,19 @@ export class OrdersService {
   }
 
   private async ensureOrderExists(id: string, tenantId: string) {
-    const exists = await this.prisma.order.findFirst({ where: { id, tenantId } });
+    const exists = await this.prisma.order.findFirst({
+      where: { id, tenantId },
+    });
     if (!exists) {
       throw new NotFoundException(`Order dengan ID "${id}" tidak ditemukan.`);
     }
+  }
+
+  private ensureTenant(tenantId: string | null | undefined): string {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context tidak ditemukan.');
+    }
+
+    return tenantId;
   }
 }

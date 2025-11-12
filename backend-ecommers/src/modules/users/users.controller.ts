@@ -6,23 +6,13 @@ import {
   Param,
   Patch,
   Post,
-  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserResponseDto } from './dto/user-response.dto';
-import type { Request } from 'express';
-import type { Tenant } from '../tenants/entities/tenant.entity';
-
-/**
- * Tipe request kustom agar semua handler eksplisit menerima tenant dari middleware.
- */
-type RequestWithTenant = Request & {
-  tenant: Tenant;
-  tenantId: string;
-};
+import { CurrentTenant } from '@/common/decorators/current-tenant.decorator';
 
 @ApiTags('Users')
 @Controller('users')
@@ -41,9 +31,9 @@ export class UsersController {
   })
   async create(
     @Body() dto: CreateUserDto,
-    @Req() req: RequestWithTenant,
+    @CurrentTenant() tenantId: string,
   ): Promise<UserResponseDto> {
-    return (await this.usersService.create(dto, req.tenant)) as UserResponseDto;
+    return (await this.usersService.create(dto, tenantId)) as UserResponseDto;
   }
 
   // ===========================================================
@@ -52,8 +42,10 @@ export class UsersController {
   @Get()
   @ApiOperation({ summary: 'Daftar user untuk tenant aktif' })
   @ApiResponse({ status: 200, type: [UserResponseDto] })
-  async findAll(@Req() req: RequestWithTenant): Promise<UserResponseDto[]> {
-    return (await this.usersService.findAll(req.tenant)) as UserResponseDto[];
+  async findAll(@CurrentTenant() tenantId: string): Promise<UserResponseDto[]> {
+    return (await this.usersService.findAllByTenant(
+      tenantId,
+    )) as UserResponseDto[];
   }
 
   // ===========================================================
@@ -63,12 +55,9 @@ export class UsersController {
   @ApiOperation({ summary: 'Ambil detail user' })
   async findOne(
     @Param('id') id: string,
-    @Req() req: RequestWithTenant,
+    @CurrentTenant() tenantId: string,
   ): Promise<UserResponseDto> {
-    return (await this.usersService.findById(
-      id,
-      req.tenant,
-    )) as UserResponseDto;
+    return (await this.usersService.findById(id, tenantId)) as UserResponseDto;
   }
 
   // ===========================================================
@@ -79,12 +68,12 @@ export class UsersController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
-    @Req() req: RequestWithTenant,
+    @CurrentTenant() tenantId: string,
   ): Promise<UserResponseDto> {
     return (await this.usersService.update(
       id,
       dto,
-      req.tenant,
+      tenantId,
     )) as UserResponseDto;
   }
 
@@ -95,8 +84,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Hapus user dari tenant aktif' })
   async remove(
     @Param('id') id: string,
-    @Req() req: RequestWithTenant,
+    @CurrentTenant() tenantId: string,
   ): Promise<UserResponseDto> {
-    return (await this.usersService.remove(id, req.tenant)) as UserResponseDto;
+    return (await this.usersService.remove(id, tenantId)) as UserResponseDto;
   }
 }

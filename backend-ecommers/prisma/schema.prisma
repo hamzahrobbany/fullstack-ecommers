@@ -29,6 +29,7 @@ model Tenant {
   orders      Order[]
   stocks      Stock[]
   orderItems  OrderItem[]
+  payments    Payment[]
 }
 
 /// ==========================
@@ -174,6 +175,7 @@ model OrderItem {
 /// ==========================
 model Payment {
   id            String        @id @default(uuid())
+  tenantId      String
   orderId       String        @unique
   method        PaymentMethod @default(CASH)
   amount        Int
@@ -183,7 +185,10 @@ model Payment {
   updatedAt     DateTime      @updatedAt
   deletedAt     DateTime? // 👈 Soft delete
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 /// ==========================
