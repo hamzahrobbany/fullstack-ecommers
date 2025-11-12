@@ -41,6 +41,12 @@ export async function bootstrapServer(): Promise<
 
   const globalPrefix = 'api';
 
+  const allowedOrigins = [
+    'http://localhost:3001',
+    'https://frontend-ecommers.vercel.app',
+    /\.vercel\.app$/,
+  ];
+
   // ======================================================
   // ☁️ EXPRESS MODE (Vercel / Serverless)
   // ======================================================
@@ -53,7 +59,7 @@ export async function bootstrapServer(): Promise<
     expressApp.setGlobalPrefix(globalPrefix);
 
     expressApp.enableCors({
-      origin: '*',
+      origin: allowedOrigins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
       credentials: true,
     });
@@ -115,8 +121,8 @@ export async function bootstrapServer(): Promise<
   await fastifyApp.register(fastifyCompress);
 
   fastifyApp.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    origin: allowedOrigins,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
 
