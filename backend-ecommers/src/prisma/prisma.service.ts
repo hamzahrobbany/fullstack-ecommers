@@ -1,4 +1,3 @@
-// src/prisma/prisma.service.ts
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 
 type PrismaClientLike = {
@@ -14,7 +13,6 @@ type PrismaClientLike = {
 let PrismaClientBase: PrismaClientLike;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   PrismaClientBase = require('@prisma/client').PrismaClient as PrismaClientLike;
 } catch {
   PrismaClientBase = class {
@@ -37,13 +35,10 @@ export class PrismaService
 
   async onModuleInit() {
     await this.connectWithRetry();
-    this.registerSoftDeleteMiddleware(); // 🧩 aktifkan middleware soft delete
+    this.registerSoftDeleteMiddleware();
     this.startKeepAlive();
   }
 
-  /**
-   * 🔁 Mekanisme retry saat koneksi Neon gagal
-   */
   private async connectWithRetry(retries = 5, delay = 3000) {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -62,9 +57,6 @@ export class PrismaService
     }
   }
 
-  /**
-   * 💓 Keep-alive query untuk jaga koneksi Neon tetap aktif
-   */
   private startKeepAlive() {
     this.keepAliveInterval = setInterval(async () => {
       try {
@@ -87,11 +79,6 @@ export class PrismaService
     }, 30_000);
   }
 
-  /**
-   * 🧩 Middleware global Soft Delete
-   * - Menyembunyikan data dengan deletedAt != null dari semua query
-   * - Mengubah delete → update deletedAt
-   */
   private registerSoftDeleteMiddleware() {
     if (!this.$use) return;
 
@@ -109,23 +96,19 @@ export class PrismaService
       const model = params.model ?? '';
 
       if (modelsWithSoftDelete.includes(model)) {
-        // Filter otomatis: abaikan data yang sudah soft deleted
         if (['findMany', 'findFirst'].includes(params.action)) {
           if (!params.args) params.args = {};
           if (!params.args.where) params.args.where = {};
-          // jika belum di-override, tambahkan filter deletedAt: null
           if (params.args.where.deletedAt === undefined) {
             params.args.where.deletedAt = null;
           }
         }
 
-        // Ganti delete jadi soft delete (update deletedAt)
         if (params.action === 'delete') {
           params.action = 'update';
           params.args['data'] = { deletedAt: new Date() };
         }
 
-        // Ganti deleteMany jadi updateMany
         if (params.action === 'deleteMany') {
           params.action = 'updateMany';
           if (!params.args.data) params.args.data = {};
@@ -145,3 +128,8 @@ export class PrismaService
     this.logger.log('🛑 Prisma disconnected cleanly.');
   }
 }
+
+const globalForPrisma = global as unknown as { prisma: PrismaService };
+export const prisma = globalForPrisma.prisma || new PrismaService();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

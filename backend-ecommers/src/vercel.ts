@@ -1,29 +1,26 @@
-// vercel.ts (serverless entry point)
-import { bootstrapServer } from './main';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express, { type Express } from 'express';
 
-/**
- * ✅ Vercel serverless entry point
- * Mem-bootstraps NestJS (Express adapter) hanya sekali,
- * lalu meneruskan semua request ke instance Express.
- */
+const server: Express = express();
 
-let cachedApp: any = null;
+async function bootstrap(): Promise<Express> {
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    logger: ['log', 'warn', 'error'],
+  });
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    // Hindari re-init setiap request di Vercel
-    if (!cachedApp) {
-      cachedApp = await bootstrapServer();
-    }
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
-    const instance = cachedApp.getHttpAdapter().getInstance();
-
-    // ✅ Panggil langsung handler Express
-    return instance(req, res);
-  } catch (error) {
-    console.error('❌ Vercel function crashed:', error);
-    res.statusCode = 500;
-    res.end('Internal Server Error');
-  }
+  await app.init(); // ✅ Penting untuk Vercel
+  return server;
 }
+
+const handler = bootstrap();
+
+// ✅ Export default untuk Vercel entrypoint
+export default handler;

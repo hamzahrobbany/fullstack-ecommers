@@ -1,0 +1,5 @@
+node_modules
+test
+src/**/*.spec.ts
+prisma/migrations
+dist/test
