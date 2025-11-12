@@ -27,8 +27,14 @@ import fastifyCompress from '@fastify/compress';
 import helmet from 'helmet';
 import compression from 'compression';
 
+/**
+ * Cached instance (for Vercel cold starts)
+ */
 let cachedApp: NestFastifyApplication | NestExpressApplication;
 
+/**
+ * 🚀 Bootstrap server for both local & Vercel
+ */
 export async function bootstrapServer(): Promise<
   NestFastifyApplication | NestExpressApplication
 > {
@@ -40,7 +46,6 @@ export async function bootstrapServer(): Promise<
     process.env.SERVERLESS === 'true';
 
   const globalPrefix = 'api';
-
   const allowedOrigins = [
     'http://localhost:3001',
     'https://frontend-ecommers.vercel.app',
@@ -48,7 +53,7 @@ export async function bootstrapServer(): Promise<
   ];
 
   // ======================================================
-  // ☁️ EXPRESS MODE (Vercel / Serverless)
+  // ☁️ EXPRESS MODE (for Vercel / Serverless)
   // ======================================================
   if (isServerless) {
     const expressApp = await NestFactory.create<NestExpressApplication>(
@@ -65,6 +70,7 @@ export async function bootstrapServer(): Promise<
     });
 
     const nativeExpress = expressApp.getHttpAdapter().getInstance();
+
     nativeExpress.use(compression());
     nativeExpress.use(
       helmet({
@@ -73,13 +79,13 @@ export async function bootstrapServer(): Promise<
       }),
     );
 
-    // 📘 Swagger (aktif hanya di dev)
+    // ✅ Swagger aktif hanya di dev
     if (process.env.NODE_ENV !== 'production') {
       const builder = new DocumentBuilder()
         .setTitle('E-Commerce API')
         .setDescription('Dokumentasi REST API Backend E-Commerce')
         .setVersion('1.0')
-        .addBearerAuth(); // ✅ tidak lagi pakai addServer('/api')
+        .addBearerAuth();
 
       const config = builder.build();
       const document = SwaggerModule.createDocument(expressApp, config);
@@ -92,14 +98,15 @@ export async function bootstrapServer(): Promise<
         customSiteTitle: 'E-Commerce API Docs',
       };
 
-      // ✅ gunakan globalPrefix otomatis di path Swagger
       const swaggerPath = `${globalPrefix}/docs`;
       SwaggerModule.setup(swaggerPath, expressApp, document, swaggerOptions);
-      Logger.log(`📘 Swagger Docs: http://localhost:3000/${swaggerPath}`, 'Swagger');
+      Logger.log(`📘 Swagger Docs: /${swaggerPath}`, 'Swagger');
     }
 
     await expressApp.init();
+    await expressApp.listen(0); // optional agar ready di lokal
     logRegisteredRoutes(expressApp, 'ExpressRoutes');
+
     cachedApp = expressApp;
     return expressApp;
   }
@@ -126,13 +133,13 @@ export async function bootstrapServer(): Promise<
     credentials: true,
   });
 
-  // 📘 Swagger (aktif hanya di dev)
+  // ✅ Swagger aktif hanya di dev
   if (process.env.NODE_ENV !== 'production') {
     const builder = new DocumentBuilder()
       .setTitle('E-Commerce API')
       .setDescription('Dokumentasi REST API Backend E-Commerce')
       .setVersion('1.0')
-      .addBearerAuth(); // ✅ hapus addServer('/api')
+      .addBearerAuth();
 
     const config = builder.build();
     const document = SwaggerModule.createDocument(fastifyApp, config);
@@ -145,7 +152,6 @@ export async function bootstrapServer(): Promise<
       customSiteTitle: 'E-Commerce API Docs',
     };
 
-    // ✅ gunakan prefix otomatis
     const swaggerPath = `${globalPrefix}/docs`;
     SwaggerModule.setup(swaggerPath, fastifyApp, document, swaggerOptions);
     Logger.log(`📘 Swagger Docs: http://localhost:3000/${swaggerPath}`, 'Swagger');
@@ -156,7 +162,7 @@ export async function bootstrapServer(): Promise<
 }
 
 /**
- * 🧩 Local Development Entry Point (Fastify)
+ * 🧩 Local Development Entry Point
  */
 if (process.env.NODE_ENV !== 'production') {
   const logger = new Logger('Bootstrap');
@@ -180,4 +186,14 @@ if (process.env.NODE_ENV !== 'production') {
       console.error('❌ Failed to start local server:', err);
       process.exit(1);
     });
+}
+
+/**
+ * ✅ Export handler for Vercel
+ * (This is what Vercel calls to serve HTTP requests)
+ */
+export default async function handler(req, res) {
+  const app = (await bootstrapServer()) as NestExpressApplication;
+  const instance = app.getHttpAdapter().getInstance();
+  return instance(req, res);
 }
