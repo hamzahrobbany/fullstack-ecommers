@@ -81,7 +81,7 @@ export async function bootstrapServer(): Promise<
       const swaggerOptions: SwaggerCustomOptions = {
         swaggerOptions: {
           persistAuthorization: true,
-          plugins: [swaggerAuthPlugin],
+          plugins: [swaggerAuthPlugin()],
         },
         customSiteTitle: 'E-Commerce API Docs',
       };
@@ -134,7 +134,7 @@ export async function bootstrapServer(): Promise<
     const swaggerOptions: SwaggerCustomOptions = {
       swaggerOptions: {
         persistAuthorization: true,
-        plugins: [swaggerAuthPlugin],
+        plugins: [swaggerAuthPlugin()],
       },
       customSiteTitle: 'E-Commerce API Docs',
     };
