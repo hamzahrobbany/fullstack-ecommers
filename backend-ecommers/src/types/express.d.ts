@@ -9,6 +9,10 @@ declare global {
         [key: string]: any;
       } | null;
       tenantId?: string | null;
+      tenantSource?: string | null;
+      tenantHostname?: string | null;
+      tenantSubdomain?: string | null;
+      debugJwtPayload?: any;
     }
   }
 }
