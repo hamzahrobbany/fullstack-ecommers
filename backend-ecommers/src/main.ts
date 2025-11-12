@@ -15,8 +15,9 @@ import {
   SwaggerCustomOptions,
 } from '@nestjs/swagger';
 
-// 🧩 Middleware
+// 🧩 Middleware & Utils
 import { logRegisteredRoutes } from './utils/log-registered-routes';
+import { swaggerAuthPlugin } from './common/swagger/swagger-auth.plugin';
 
 // 🌐 Fastify plugins
 import fastifyHelmet from '@fastify/helmet';
@@ -25,9 +26,6 @@ import fastifyCompress from '@fastify/compress';
 // 🌐 Express middlewares
 import helmet from 'helmet';
 import compression from 'compression';
-
-// 📘 Swagger Plugins
-import { swaggerAuthPlugin } from './common/swagger/swagger-auth.plugin';
 
 let cachedApp: NestFastifyApplication | NestExpressApplication;
 
@@ -41,6 +39,8 @@ export async function bootstrapServer(): Promise<
     process.env.VERCEL === 'true' ||
     process.env.SERVERLESS === 'true';
 
+  const globalPrefix = 'api';
+
   // ======================================================
   // ☁️ EXPRESS MODE (Vercel / Serverless)
   // ======================================================
@@ -50,6 +50,8 @@ export async function bootstrapServer(): Promise<
       new ExpressAdapter(),
     );
 
+    expressApp.setGlobalPrefix(globalPrefix);
+
     expressApp.enableCors({
       origin: '*',
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -57,7 +59,6 @@ export async function bootstrapServer(): Promise<
     });
 
     const nativeExpress = expressApp.getHttpAdapter().getInstance();
-
     nativeExpress.use(compression());
     nativeExpress.use(
       helmet({
@@ -66,29 +67,15 @@ export async function bootstrapServer(): Promise<
       }),
     );
 
-    expressApp.setGlobalPrefix('api');
-
-    // 📘 Swagger hanya aktif di development
+    // 📘 Swagger (aktif hanya di dev)
     if (process.env.NODE_ENV !== 'production') {
       const builder = new DocumentBuilder()
         .setTitle('E-Commerce API')
         .setDescription('Dokumentasi REST API Backend E-Commerce')
         .setVersion('1.0')
-        .addBearerAuth()
-        .addServer('/api');
+        .addBearerAuth(); // ✅ tidak lagi pakai addServer('/api')
 
-      const swaggerBuilder =
-        typeof (builder as any).addApiHeader === 'function'
-          ? (builder as any).addApiHeader({
-              name: 'X-Tenant-ID',
-              required: false,
-              description:
-                'Tenant UUID atau kode tenant aktif (opsional, bisa digantikan tenantCode di body)',
-            })
-          : builder;
-
-      const config = swaggerBuilder.build();
-
+      const config = builder.build();
       const document = SwaggerModule.createDocument(expressApp, config);
 
       const swaggerOptions: SwaggerCustomOptions = {
@@ -99,8 +86,10 @@ export async function bootstrapServer(): Promise<
         customSiteTitle: 'E-Commerce API Docs',
       };
 
-      SwaggerModule.setup('api/docs', expressApp, document, swaggerOptions);
-      Logger.log('📘 Swagger Docs: http://localhost:3000/api/docs', 'Swagger');
+      // ✅ gunakan globalPrefix otomatis di path Swagger
+      const swaggerPath = `${globalPrefix}/docs`;
+      SwaggerModule.setup(swaggerPath, expressApp, document, swaggerOptions);
+      Logger.log(`📘 Swagger Docs: http://localhost:3000/${swaggerPath}`, 'Swagger');
     }
 
     await expressApp.init();
@@ -117,6 +106,8 @@ export async function bootstrapServer(): Promise<
     new FastifyAdapter(),
   );
 
+  fastifyApp.setGlobalPrefix(globalPrefix);
+
   await fastifyApp.register(fastifyHelmet, {
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
@@ -129,29 +120,15 @@ export async function bootstrapServer(): Promise<
     credentials: true,
   });
 
-  fastifyApp.setGlobalPrefix('api');
-
-  // 📘 Swagger
+  // 📘 Swagger (aktif hanya di dev)
   if (process.env.NODE_ENV !== 'production') {
     const builder = new DocumentBuilder()
       .setTitle('E-Commerce API')
       .setDescription('Dokumentasi REST API Backend E-Commerce')
       .setVersion('1.0')
-      .addBearerAuth()
-      .addServer('/api');
+      .addBearerAuth(); // ✅ hapus addServer('/api')
 
-    const swaggerBuilder =
-      typeof (builder as any).addApiHeader === 'function'
-        ? (builder as any).addApiHeader({
-            name: 'X-Tenant-ID',
-            required: false,
-            description:
-              'Tenant UUID atau kode tenant aktif (opsional, bisa digantikan tenantCode di body)',
-          })
-        : builder;
-
-    const config = swaggerBuilder.build();
-
+    const config = builder.build();
     const document = SwaggerModule.createDocument(fastifyApp, config);
 
     const swaggerOptions: SwaggerCustomOptions = {
@@ -162,8 +139,10 @@ export async function bootstrapServer(): Promise<
       customSiteTitle: 'E-Commerce API Docs',
     };
 
-    SwaggerModule.setup('api/docs', fastifyApp, document, swaggerOptions);
-    Logger.log('📘 Swagger Docs: http://localhost:3000/api/docs', 'Swagger');
+    // ✅ gunakan prefix otomatis
+    const swaggerPath = `${globalPrefix}/docs`;
+    SwaggerModule.setup(swaggerPath, fastifyApp, document, swaggerOptions);
+    Logger.log(`📘 Swagger Docs: http://localhost:3000/${swaggerPath}`, 'Swagger');
   }
 
   cachedApp = fastifyApp;
