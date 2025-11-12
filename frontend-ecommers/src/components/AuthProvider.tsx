@@ -1,12 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
+import { getCookie, setCookie, deleteCookie } from "cookies-next";
 import { api } from "@/lib/api-client";
 import { authResponseSchema } from "@/lib/zod-schemas/auth";
 import type { AuthResponse } from "@/types/auth";
-import { setCookie, deleteCookie } from "cookies-next";
 
 type AuthContextType = {
   user: AuthResponse["user"] | null;
@@ -26,8 +26,34 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthResponse["user"] | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      const token = getCookie("kop_at");
+      const tenantId = getCookie("tenant_id");
+
+      if (!token || !tenantId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.get("auth/me");
+        const data = await response.json<{ user: AuthResponse["user"] }>();
+        setUser(data.user);
+      } catch {
+        deleteCookie("kop_at");
+        deleteCookie("tenant_id");
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void restoreSession();
+  }, []);
 
   const handleLogin = useCallback(async (payload: z.infer<typeof loginSchema>) => {
     setIsLoading(true);
@@ -81,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     deleteCookie("kop_at");
     deleteCookie("tenant_id");
     setUser(null);
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
   }, []);
 
   return (
