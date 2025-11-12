@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const tenantId = getCookie("tenant_id");
 
       if (!token || !tenantId) {
+        deleteCookie("kop_rt");
         setIsLoading(false);
         return;
       }
@@ -45,8 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
       } catch {
         deleteCookie("kop_at");
+        deleteCookie("kop_rt");
         deleteCookie("tenant_id");
         setUser(null);
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
       } finally {
         setIsLoading(false);
       }
@@ -105,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleLogout = useCallback(() => {
     deleteCookie("kop_at");
+    deleteCookie("kop_rt");
     deleteCookie("tenant_id");
     setUser(null);
     if (typeof window !== "undefined") {
