@@ -58,7 +58,7 @@ export class TenantsController {
     type: TenantResponseDto,
   })
   findOne(@Param('id') id: string) {
-    return this.tenantsService.findById(id);
+    return this.tenantsService.findByIdOrThrow(id);
   }
 
   // ===========================================================

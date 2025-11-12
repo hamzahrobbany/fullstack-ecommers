@@ -45,9 +45,18 @@ export class TenantsService {
   // 🔍 FIND ONE BY ID
   // ===========================================================
   async findById(id: string) {
-    const tenant = await this.orm.tenant.findUnique({ where: { id } });
-    if (!tenant)
+    if (!id) {
+      return null;
+    }
+
+    return this.prisma.tenant.findUnique({ where: { id } });
+  }
+
+  async findByIdOrThrow(id: string) {
+    const tenant = await this.findById(id);
+    if (!tenant) {
       throw new NotFoundException(`Tenant dengan ID "${id}" tidak ditemukan`);
+    }
     return tenant;
   }
 
@@ -58,9 +67,9 @@ export class TenantsService {
     if (!code) {
       return null;
     }
-    const normalized = code.toLowerCase().trim();
+
     return this.prisma.tenant.findUnique({
-      where: { code: normalized },
+      where: { code: code.toLowerCase().trim() },
     });
   }
 
@@ -83,7 +92,7 @@ export class TenantsService {
   // 🧱 UPDATE TENANT
   // ===========================================================
   async update(id: string, dto: UpdateTenantDto) {
-    const tenant = await this.findById(id);
+    const tenant = await this.findByIdOrThrow(id);
 
     const newCode = dto.code?.toLowerCase().trim();
     const newDomain = dto.domain?.toLowerCase().trim();
@@ -107,7 +116,7 @@ export class TenantsService {
   // 🗑️ DELETE TENANT
   // ===========================================================
   async remove(id: string) {
-    await this.findById(id);
+    await this.findByIdOrThrow(id);
     await this.orm.tenant.delete({ where: { id } });
     return { message: `Tenant dengan ID "${id}" berhasil dihapus` };
   }

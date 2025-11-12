@@ -20,10 +20,12 @@ import { AppController } from './app.controller';
     ProductsModule,
   ],
   controllers: [AppController, DebugController],
-  providers: [TenantContextMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantContextMiddleware).forRoutes('*');
+    consumer
+      .apply(TenantContextMiddleware)
+      .exclude('/api/auth/register', '/api/auth/login', '/api/docs')
+      .forRoutes('*');
   }
 }

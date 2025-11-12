@@ -21,12 +21,10 @@ import { TenantContextMiddleware } from './common/middleware/tenant-context.midd
 // 🌐 Fastify plugins
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCompress from '@fastify/compress';
-import fastifyCors from '@fastify/cors';
 
 // 🌐 Express middlewares
 import helmet from 'helmet';
 import compression from 'compression';
-import cors from 'cors';
 
 // 📘 Swagger Plugins
 import { swaggerAuthPlugin } from './common/swagger/swagger-auth.plugin';
@@ -52,9 +50,14 @@ export async function bootstrapServer(): Promise<
       new ExpressAdapter(),
     );
 
+    expressApp.enableCors({
+      origin: '*',
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      credentials: true,
+    });
+
     const nativeExpress = expressApp.getHttpAdapter().getInstance();
 
-    nativeExpress.use(cors({ origin: true, credentials: true }));
     nativeExpress.use(compression());
     nativeExpress.use(
       helmet({
@@ -133,7 +136,12 @@ export async function bootstrapServer(): Promise<
     crossOriginEmbedderPolicy: false,
   });
   await fastifyApp.register(fastifyCompress);
-  await fastifyApp.register(fastifyCors, { origin: true, credentials: true });
+
+  fastifyApp.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
   fastifyApp.setGlobalPrefix('api');
 
