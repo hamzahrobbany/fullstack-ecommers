@@ -1,7 +1,13 @@
 'use client';
 
 import { Layout, Menu, Typography } from 'antd';
-import { CoffeeOutlined, StarOutlined, ShoppingCartOutlined } from '@ant-design/icons';
+import {
+  CoffeeOutlined,
+  StarOutlined,
+  ShoppingCartOutlined,
+  DashboardOutlined,
+  LoginOutlined,
+} from '@ant-design/icons';
 import Link from 'next/link';
 
 const { Header: AntHeader } = Layout;
@@ -20,6 +26,16 @@ export default function Header() {
           { key: 'home', icon: <CoffeeOutlined />, label: <Link href="/">Home</Link> },
           { key: 'hot', icon: <StarOutlined />, label: <Link href="/hot">Hot</Link> },
           { key: 'cart', icon: <ShoppingCartOutlined />, label: <Link href="/cart">Cart</Link> },
+          {
+            key: 'dashboard',
+            icon: <DashboardOutlined />,
+            label: <Link href="/dashboard">Dashboard</Link>,
+          },
+          {
+            key: 'login',
+            icon: <LoginOutlined />,
+            label: <Link href="/(auth)/login">Masuk</Link>,
+          },
         ]}
         style={{ marginLeft: 24, flex: 1, minWidth: 0 }}
       />

@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { ConfigProvider, App as AntApp } from 'antd';
 import AntdRegistry from '@/components/AntdRegistry';
 import React from 'react';
+import AuthProvider from '@/components/AuthProvider';
 
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -17,8 +18,10 @@ export default function AppProviders({ children }: { children: React.ReactNode }
       >
         <AntApp>
           <QueryClientProvider client={queryClient}>
-            {children}
-            <Toaster richColors position="top-right" />
+            <AuthProvider>
+              {children}
+              <Toaster richColors position="top-right" />
+            </AuthProvider>
           </QueryClientProvider>
         </AntApp>
       </ConfigProvider>
