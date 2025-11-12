@@ -38,9 +38,7 @@ export class TenantContextMiddleware implements NestMiddleware {
         const fallbackTenant = await this.tenantsService.findByCode('salwa');
         if (fallbackTenant) {
           tenantId = fallbackTenant.id;
-          this.logger.warn(
-            `⚠️ TenantContext: menggunakan default tenant '${fallbackTenant.code}' untuk debug`
-          );
+          this.logger.warn(`⚠️ Default tenant digunakan: ${fallbackTenant.code}`);
         }
       }
 

@@ -11,61 +11,63 @@ import { AppModule } from './app.module';
 import { swaggerAuthPlugin } from './common/swagger/swagger-auth.plugin';
 import { logRegisteredRoutes } from './utils/log-registered-routes';
 
+// Cache untuk cold start
 let cachedServer: Express | null = null;
 
 async function bootstrap(): Promise<Express> {
-  if (cachedServer) {
-    return cachedServer;
-  }
+  if (cachedServer) return cachedServer;
 
   const server = express();
-  const adapter = new ExpressAdapter(server);
 
-  const app = await NestFactory.create(AppModule, adapter, {
-    logger: ['log', 'warn', 'error'],
-  });
-
-  app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
-
-  app.setGlobalPrefix('api');
-
-  const nativeExpress = app.getHttpAdapter().getInstance() as Express;
-  nativeExpress.use(compression());
-  nativeExpress.use(
+  // ✅ Middleware global (non-Nest)
+  server.use(compression());
+  server.use(
     helmet({
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
     }),
   );
 
-  const builder = new DocumentBuilder()
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    logger: ['log', 'warn', 'error'],
+  });
+
+  // ✅ CORS
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
+
+  // ❌ Tidak pakai prefix /api
+  // app.setGlobalPrefix('api');
+
+  // ✅ Swagger Docs di /docs
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('E-Commerce API')
     .setDescription('Dokumentasi REST API Backend E-Commerce')
-    .setVersion('1.0')
+    .setVersion('1.0.0')
     .addBearerAuth()
-    .addServer('/api');
+    .addServer('/')
+    .build();
 
-  const swaggerConfig = builder.build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
 
-  SwaggerModule.setup('api/docs', app, document, {
+  SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
       plugins: [swaggerAuthPlugin()],
       requestInterceptor: (req: Record<string, any>) => {
         try {
-          const globalWindow = (globalThis as any)?.window;
-          const token = globalWindow?.localStorage?.getItem('swagger_token');
-          const tenant = globalWindow?.localStorage?.getItem('swagger_tenant');
-          req.headers = req.headers || {};
-          if (token) req.headers.Authorization = `Bearer ${token}`;
-          if (tenant) req.headers['X-Tenant-ID'] = tenant;
+          if (typeof window !== 'undefined') {
+            const token = window.localStorage?.getItem('swagger_token');
+            const tenant = window.localStorage?.getItem('swagger_tenant');
+            req.headers = req.headers || {};
+            if (token) req.headers.Authorization = `Bearer ${token}`;
+            if (tenant) req.headers['X-Tenant-ID'] = tenant;
+          }
         } catch (error) {
-          Logger.warn(`Failed to enrich Swagger request headers: ${(error as Error).message}`);
+          Logger.warn(`Failed to enrich Swagger headers: ${(error as Error).message}`);
         }
         return req;
       },
@@ -75,13 +77,20 @@ async function bootstrap(): Promise<Express> {
 
   await app.init();
 
+  // Log route terdaftar
   logRegisteredRoutes(app, 'VercelRoutes');
 
   cachedServer = server;
   return server;
 }
 
+// ✅ Handler default untuk Vercel
 export default async function handler(req: Request, res: Response) {
-  const server = await bootstrap();
-  return server(req, res);
+  try {
+    const server = await bootstrap();
+    server(req, res);
+  } catch (error) {
+    Logger.error(`❌ Handler Error: ${(error as Error).message}`);
+    res.status(500).send('Internal Server Error');
+  }
 }

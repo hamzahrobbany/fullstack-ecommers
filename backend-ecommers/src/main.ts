@@ -16,7 +16,6 @@ import {
 } from '@nestjs/swagger';
 
 // 🧩 Middleware
-import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
 import { logRegisteredRoutes } from './utils/log-registered-routes';
 
 // 🌐 Fastify plugins
@@ -68,10 +67,6 @@ export async function bootstrapServer(): Promise<
     );
 
     expressApp.setGlobalPrefix('api');
-
-    // 🧩 Apply TenantContextMiddleware globally (public routes akan di-handle oleh middleware).
-    const tenantMiddleware = expressApp.get(TenantContextMiddleware);
-    expressApp.use(tenantMiddleware.use.bind(tenantMiddleware));
 
     // 📘 Swagger hanya aktif di development
     if (process.env.NODE_ENV !== 'production') {
@@ -146,10 +141,6 @@ export async function bootstrapServer(): Promise<
   });
 
   fastifyApp.setGlobalPrefix('api');
-
-  // 🧩 TenantContextMiddleware (Fastify) — diaplikasikan secara global.
-  const fastifyTenantMiddleware = fastifyApp.get(TenantContextMiddleware);
-  fastifyApp.use(fastifyTenantMiddleware.use.bind(fastifyTenantMiddleware));
 
   // 📘 Swagger
   if (process.env.NODE_ENV !== 'production') {
