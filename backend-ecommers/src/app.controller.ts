@@ -1,32 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
 
-@Controller() // jangan tambahkan 'api' karena sudah di-setGlobalPrefix('api') di main.ts
+@Controller()
 export class AppController {
-  @Get('info')
-  getInfo() {
-    return {
-      ok: true,
-      name: 'Backend E-Commerce',
-      framework: 'NestJS + Fastify',
-      platform: process.env.VERCEL ? 'Vercel Serverless' : 'Local Development',
-      time: new Date().toISOString(),
-      node: process.version,
-    };
-  }
-
   @Get()
-  getRoot() {
+  getHello() {
     return {
-      ok: true,
-      message: '🚀 Welcome to Backend E-Commerce API',
-      docs: '/api/info',
-      health: '/api/healthz',
-      endpoints: [
-        '/api/products',
-        '/api/tenants',
-        '/api/users',
-        '/api/subscribe',
-      ],
+      message: '🚀 Backend E-Commers API is running successfully!',
+      docs: '/api/docs',
+      version: '1.0.0',
     };
   }
 

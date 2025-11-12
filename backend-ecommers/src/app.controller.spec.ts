@@ -7,12 +7,14 @@ describe('AppController', () => {
     appController = new AppController();
   });
 
-  it('returns landing metadata from root route', () => {
-    const result = appController.getRoot();
+  it('returns default landing response', () => {
+    const result = appController.getHello();
 
-    expect(result.ok).toBe(true);
-    expect(result.message).toContain('Backend E-Commerce API');
-    expect(result.endpoints).toContain('/api/products');
+    expect(result).toEqual({
+      message: '🚀 Backend E-Commers API is running successfully!',
+      docs: '/api/docs',
+      version: '1.0.0',
+    });
   });
 
   it('returns health information', () => {

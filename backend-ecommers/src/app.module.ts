@@ -8,6 +8,7 @@ import { UsersModule } from '@/modules/users/users.module';
 import { TenantsModule } from '@/modules/tenants/tenants.module';
 import { ProductsModule } from '@/modules/products/products.module';
 import { PrismaModule } from '@/prisma/prisma.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { PrismaModule } from '@/prisma/prisma.module';
     TenantsModule,
     ProductsModule,
   ],
-  controllers: [DebugController],
+  controllers: [AppController, DebugController],
   providers: [TenantContextMiddleware],
 })
 export class AppModule implements NestModule {

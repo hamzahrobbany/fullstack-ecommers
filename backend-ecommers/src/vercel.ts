@@ -16,6 +16,8 @@ async function bootstrap(): Promise<Express> {
     credentials: true,
   });
 
+  app.setGlobalPrefix('api');
+
   await app.init(); // ✅ Penting untuk Vercel
   return server;
 }
